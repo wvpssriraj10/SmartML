@@ -1,0 +1,738 @@
+import os
+import re
+import uuid
+import json
+import sys
+import zipfile
+import io
+from datetime import datetime
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+# Load environment variables from a root .env file when starting the backend.
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+from ml_engine.trainer import convert
+from ml_engine.preprocessing import DatasetInspector
+from ml_engine.cleaning import apply_cleaning_action, calculate_dataset_metrics
+from ml_engine.ai_insights import generate_executive_insights, generate_pdf_report
+from .database import (
+    init_db, create_job, update_job, get_job, list_jobs,
+    create_dataset, update_dataset, get_dataset, list_datasets, delete_dataset
+)
+from .schemas import TrainRequest, UploadResponse, StatusResponse, ChatRequest, ChatResponse, ExportRequest, CleaningActionRequest
+from .worker import start_training
+from .llm_agent import chat_with_agent
+from .exporter import generate_inference_code, generate_requirements, generate_readme
+import pandas as pd
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    init_db()
+    yield
+
+
+app = FastAPI(title="SmartML Dashboard API", version="2.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ─── Health ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "service": "SmartML Dashboard", "version": "2.0.0"}
+
+
+# ─── Upload ───────────────────────────────────────────────────────────────────
+
+@app.post("/api/upload", response_model=UploadResponse)
+async def upload_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ['.csv', '.xlsx', '.xls', '.json']:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}. Use CSV, Excel, or JSON.")
+
+    job_id = str(uuid.uuid4())
+    safe_name = f"{job_id}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+
+    try:
+        inspector = DatasetInspector(file_path)
+        inspector.load()
+        inspection = inspector.inspect()
+        # Take a sample of the data for feature analysis
+        sample_size = min(1000, len(inspector.df))
+        sample_df = inspector.df.head(sample_size)
+        # Convert to list of dicts
+        sample = sample_df.to_dict('records')
+        # Convert numpy types to Python types
+        inspection['sample'] = convert(sample)
+        target_candidates = inspector.suggest_target()
+    except Exception as e:
+        os.remove(file_path)
+        raise HTTPException(status_code=422, detail=f"Failed to parse dataset: {str(e)}")
+
+    preferred_names = ('target', 'label', 'class', 'output', 'result', 'outcome', 'price', 'salary', 'churn')
+    suggested = next((item['column'] for name in preferred_names for item in target_candidates if name in item['column'].lower()), None)
+    if not suggested and target_candidates:
+        suggested = target_candidates[-1]['column']
+    if suggested:
+        unique_count = inspection.get('column_stats', {}).get(suggested, {}).get('unique_count', 0)
+        inspection['suggested_target'] = suggested
+        inspection['suggested_problem_type'] = 'classification' if suggested in inspection.get('categorical_columns', []) or unique_count <= 20 else 'regression'
+        inspection.setdefault('kpis', {})['suggested_target'] = suggested
+
+    create_job(job_id, file_path, file.filename)
+    update_job(job_id, inspection=json.dumps(convert(inspection), indent=2))
+
+    # Also register dataset entity
+    dataset_id = job_id
+    metrics = calculate_dataset_metrics(inspector.df)
+    create_dataset(
+        dataset_id=dataset_id,
+        name=file.filename.split('.')[0].replace('_', ' ').title(),
+        filename=file.filename,
+        file_path=file_path,
+        file_size=os.path.getsize(file_path),
+        file_type=ext.replace('.', ''),
+        row_count=inspection['rows'],
+        col_count=inspection['columns'],
+        inspection_data=metrics
+    )
+
+    return UploadResponse(
+        job_id=job_id,
+        filename=file.filename,
+        inspection=inspection,
+        message=f"Dataset '{file.filename}' uploaded. Rows: {inspection['rows']}, Columns: {inspection['columns']}"
+    )
+
+
+# ─── DataSense Dataset Library & Cleaning API ─────────────────────────────────
+
+@app.get("/api/datasets")
+def get_datasets_list(limit: int = 50):
+    datasets = list_datasets(limit)
+    for ds in datasets:
+        if ds.get('cleaning_pipeline'):
+            try:
+                ds['cleaning_pipeline'] = json.loads(ds['cleaning_pipeline'])
+            except Exception:
+                ds['cleaning_pipeline'] = []
+        if ds.get('inspection_data'):
+            try:
+                ds['inspection_data'] = json.loads(ds['inspection_data'])
+            except Exception:
+                ds['inspection_data'] = {}
+    return {"datasets": datasets}
+
+
+@app.get("/api/datasets/{dataset_id}")
+def get_dataset_by_id(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    if ds.get('cleaning_pipeline'):
+        try:
+            ds['cleaning_pipeline'] = json.loads(ds['cleaning_pipeline'])
+        except Exception:
+            ds['cleaning_pipeline'] = []
+
+    file_to_load = ds.get('cleaned_file_path') or ds.get('file_path')
+    if os.path.exists(file_to_load):
+        try:
+            inspector = DatasetInspector(file_to_load)
+            inspector.load()
+            metrics = calculate_dataset_metrics(inspector.df)
+            ds['metrics'] = metrics
+            ds['columns'] = list(inspector.df.columns)
+        except Exception:
+            pass
+
+    return ds
+
+
+@app.delete("/api/datasets/{dataset_id}")
+def remove_dataset(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if os.path.exists(ds['file_path']):
+        try:
+            os.remove(ds['file_path'])
+        except Exception:
+            pass
+    if ds.get('cleaned_file_path') and os.path.exists(ds['cleaned_file_path']):
+        try:
+            os.remove(ds['cleaned_file_path'])
+        except Exception:
+            pass
+    delete_dataset(dataset_id)
+    return {"message": "Dataset deleted successfully", "id": dataset_id}
+
+
+@app.get("/api/datasets/{dataset_id}/preview")
+def preview_dataset(dataset_id: str, page: int = 1, page_size: int = 20, search: str = ""):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    file_path = ds.get('cleaned_file_path') or ds.get('file_path')
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+
+    inspector = DatasetInspector(file_path)
+    inspector.load()
+    df = inspector.df
+
+    if search:
+        mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False, na=False)).any(axis=1)
+        df = df[mask]
+
+    total_rows = len(df)
+    total_pages = max(1, (total_rows + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+
+    start_idx = (page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_rows)
+
+    page_df = df.iloc[start_idx:end_idx].fillna("")
+    records = convert(page_df.to_dict('records'))
+
+    return {
+        "dataset_id": dataset_id,
+        "name": ds['name'],
+        "columns": list(df.columns),
+        "rows": records,
+        "page": page,
+        "page_size": page_size,
+        "total_rows": total_rows,
+        "total_pages": total_pages,
+        "start_row": start_idx + 1 if total_rows > 0 else 0,
+        "end_row": end_idx
+    }
+
+
+@app.post("/api/datasets/{dataset_id}/cleaning/actions")
+def apply_cleaning_step(dataset_id: str, req: CleaningActionRequest):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if ds['status'] == 'finalized':
+        raise HTTPException(status_code=400, detail="Dataset is finalized and locked against further edits.")
+
+    source_path = ds.get('cleaned_file_path') or ds.get('file_path')
+    if not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    inspector = DatasetInspector(source_path)
+    inspector.load()
+    df = inspector.df
+
+    cleaned_df, step_desc = apply_cleaning_action(
+        df=df,
+        action=req.action,
+        column=req.column,
+        strategy=req.strategy,
+        value=req.value,
+        replace_with=req.replace_with
+    )
+
+    # Save cleaned dataframe to file
+    cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned.csv")
+    cleaned_df.to_csv(cleaned_file_path, index=False)
+
+    # Append to cleaning pipeline history
+    pipeline = json.loads(ds.get('cleaning_pipeline', '[]')) if ds.get('cleaning_pipeline') else []
+    step_id = f"step_{len(pipeline) + 1}"
+    new_step = {
+        "step_id": step_id,
+        "action": req.action,
+        "column": req.column,
+        "strategy": req.strategy,
+        "description": step_desc,
+        "timestamp": datetime.now().isoformat()
+    }
+    pipeline.append(new_step)
+
+    metrics = calculate_dataset_metrics(cleaned_df)
+
+    update_dataset(
+        dataset_id,
+        cleaned_file_path=cleaned_file_path,
+        row_count=metrics['rows'],
+        col_count=metrics['cols'],
+        cleaning_pipeline=json.dumps(pipeline),
+        inspection_data=json.dumps(metrics)
+    )
+
+    return {
+        "dataset_id": dataset_id,
+        "step": new_step,
+        "pipeline": pipeline,
+        "metrics": metrics,
+        "columns": list(cleaned_df.columns),
+        "message": f"Applied cleaning action: {step_desc}"
+    }
+
+
+@app.post("/api/datasets/{dataset_id}/cleaning/undo")
+def undo_cleaning_step(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if ds['status'] == 'finalized':
+        raise HTTPException(status_code=400, detail="Dataset is finalized and locked.")
+
+    pipeline = json.loads(ds.get('cleaning_pipeline', '[]')) if ds.get('cleaning_pipeline') else []
+    if not pipeline:
+        raise HTTPException(status_code=400, detail="No cleaning steps to undo.")
+
+    pipeline.pop()
+
+    # Re-apply remaining pipeline steps on raw file
+    raw_path = ds['file_path']
+    inspector = DatasetInspector(raw_path)
+    inspector.load()
+    df = inspector.df
+
+    for step in pipeline:
+        df, _ = apply_cleaning_action(
+            df=df,
+            action=step.get('action'),
+            column=step.get('column'),
+            strategy=step.get('strategy'),
+            value=step.get('value'),
+            replace_with=step.get('replace_with')
+        )
+
+    cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned.csv")
+    if pipeline:
+        df.to_csv(cleaned_file_path, index=False)
+    else:
+        if os.path.exists(cleaned_file_path):
+            os.remove(cleaned_file_path)
+        cleaned_file_path = None
+
+    metrics = calculate_dataset_metrics(df)
+
+    update_dataset(
+        dataset_id,
+        cleaned_file_path=cleaned_file_path,
+        row_count=metrics['rows'],
+        col_count=metrics['cols'],
+        cleaning_pipeline=json.dumps(pipeline),
+        inspection_data=json.dumps(metrics)
+    )
+
+    return {
+        "dataset_id": dataset_id,
+        "pipeline": pipeline,
+        "metrics": metrics,
+        "columns": list(df.columns),
+        "message": "Undid last cleaning step successfully"
+    }
+
+
+@app.post("/api/datasets/{dataset_id}/finalize")
+def finalize_dataset(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    update_dataset(dataset_id, status='finalized')
+    return {"dataset_id": dataset_id, "status": "finalized", "message": f"Dataset '{ds['name']}' has been finalized and locked."}
+
+
+@app.get("/api/datasets/{dataset_id}/download")
+def download_cleaned_dataset(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    file_path = ds.get('cleaned_file_path') or ds.get('file_path')
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+
+    filename = f"{ds['name'].replace(' ', '_').lower()}_cleaned.csv"
+    return StreamingResponse(
+        open(file_path, "rb"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/datasets/{dataset_id}/ai-insights")
+def get_dataset_ai_insights(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    file_path = ds.get('cleaned_file_path') or ds.get('file_path')
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+
+    inspector = DatasetInspector(file_path)
+    inspector.load()
+    df = inspector.df
+
+    insights = generate_executive_insights(df=df, dataset_name=ds['name'])
+    return {"dataset_id": dataset_id, "name": ds['name'], "insights": insights}
+
+
+@app.get("/api/datasets/{dataset_id}/pdf-report")
+def download_dataset_pdf_report(dataset_id: str):
+    ds = get_dataset(dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    file_path = ds.get('cleaned_file_path') or ds.get('file_path')
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+
+    inspector = DatasetInspector(file_path)
+    inspector.load()
+    df = inspector.df
+
+    insights = generate_executive_insights(df=df, dataset_name=ds['name'])
+    pdf_bytes = generate_pdf_report(dataset_name=ds['name'], insights=insights)
+
+    safe_name = ds['name'].replace(' ', '_').lower()
+    filename = f"AI_Insights_Report_{safe_name}.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+
+
+# ─── Train ────────────────────────────────────────────────────────────────────
+
+@app.post("/api/train")
+def train_model(req: TrainRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] == 'running':
+        raise HTTPException(status_code=400, detail="Training already in progress")
+    if job['status'] == 'completed':
+        raise HTTPException(status_code=400, detail="Training already completed. Use /api/results endpoint.")
+
+    # Validate that the target column exists in the dataset
+    inspection = json.loads(job['inspection']) if job['inspection'] else {}
+    column_names = inspection.get('column_names', [])
+    if req.target_column not in column_names:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target column '{req.target_column}' not found in dataset. Available columns: {column_names}"
+        )
+
+    update_job(
+        req.job_id,
+        target_column=req.target_column,
+        problem_type=req.problem_type,
+        model_selection=req.model_selection,
+        selected_models=json.dumps(req.selected_models) if req.selected_models else None,
+        status='queued'
+    )
+
+    start_training(
+        job_id=req.job_id,
+        file_path=job['file_path'],
+        target_column=req.target_column,
+        problem_type=req.problem_type,
+        model_selection=req.model_selection,
+        selected_models=req.selected_models
+    )
+
+    return {"job_id": req.job_id, "status": "queued", "message": "Training started in background. Poll /api/status for updates."}
+
+
+# ─── Status ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/status/{job_id}")
+def get_status(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    response = {
+        "job_id": job_id,
+        "status": job['status'],
+        "filename": job['original_filename'],
+        "target_column": job['target_column'],
+        "problem_type": job['problem_type'],
+        "created_at": job['created_at'],
+        "updated_at": job['updated_at']
+    }
+    for field in ('progress', 'logs'):
+        if job.get(field):
+            try:
+                response[field] = json.loads(job[field])
+            except Exception:
+                response[field] = None if field == 'progress' else []
+
+    if job['status'] == 'running':
+        response['message'] = "Training models..."
+    elif job['status'] == 'completed':
+        response['message'] = "Training completed"
+    elif job['status'] == 'failed':
+        response['message'] = job['error']
+
+    # Include partial results count if available
+    if job.get('results'):
+        try:
+            results = json.loads(job['results'])
+            response['models_completed'] = len(results)
+        except Exception:
+            pass
+
+    return response
+
+
+# ─── Results ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/results/{job_id}")
+def get_results(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail=f"Training not completed. Current status: {job['status']}")
+
+    inspection = json.loads(job['inspection']) if job['inspection'] else {}
+    data_report = json.loads(job['data_report']) if job['data_report'] else {}
+    results = json.loads(job['results']) if job['results'] else []
+    best_model = None
+    target_classes = data_report.get('target_classes') if data_report else None
+    num_classes = data_report.get('num_classes') if data_report else None
+
+    if results:
+        best = results[0]
+        best_model = {
+            "name": best['model_name'],
+            "metrics": best['metrics'],
+            "training_time": best['training_time']
+        }
+
+    return {
+        "job_id": job_id,
+        "filename": job['original_filename'],
+        "inspection": inspection,
+        "problem_type": data_report.get('problem_type') if data_report else None,
+        "target_column": job['target_column'],
+        "target_classes": target_classes,
+        "num_classes": num_classes,
+        "model_selection_strategy": data_report.get('model_selection_strategy') if data_report else None,
+        "models_trained": data_report.get('models_trained', []) if data_report else [],
+        "best_model": best_model,
+        "results": results,
+        "total_models": len(results),
+        "successful": sum(1 for r in results if r.get('status') == 'completed'),
+        "failed": sum(1 for r in results if r.get('status') == 'failed')
+    }
+
+
+# ─── Jobs List ────────────────────────────────────────────────────────────────
+
+@app.get("/api/jobs")
+def get_jobs(limit: int = 20):
+    return {"jobs": list_jobs(limit)}
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job_details(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    inspection = json.loads(job['inspection']) if job.get('inspection') else {}
+    return {
+        "job_id": job_id,
+        "filename": job['original_filename'],
+        "status": job['status'],
+        "target_column": job['target_column'],
+        "problem_type": job['problem_type'],
+        "inspection": inspection,
+    }
+
+
+# ─── Chat / LLM Agent ─────────────────────────────────────────────────────────
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    inspection = {}
+    if job.get('inspection'):
+        try:
+            inspection = json.loads(job['inspection'])
+        except Exception:
+            pass
+
+    # Build results context if training is done
+    results_context = None
+    if job['status'] == 'completed' and job.get('results'):
+        try:
+            results = json.loads(job['results'])
+            data_report = json.loads(job['data_report']) if job.get('data_report') else {}
+            best = results[0] if results else None
+            results_context = {
+                "status": "completed",
+                "problem_type": data_report.get('problem_type'),
+                "best_model": {
+                    "name": best['model_name'],
+                    "metrics": best['metrics'],
+                    "training_time": best['training_time']
+                } if best else None,
+                "total_models": len(results),
+                "models": [{"name": r['model_name'], "metrics": r.get('metrics', {})} for r in results[:5]]
+            }
+        except Exception:
+            pass
+
+    history = [{"role": m.role, "content": m.content} for m in (req.history or [])]
+
+    response = chat_with_agent(
+        message=req.message,
+        inspection=inspection,
+        history=history,
+        results_context=results_context
+    )
+
+    return ChatResponse(
+        reply=response.get("reply", "Sorry, I couldn't process that. Please try again."),
+        suggested_target=response.get("suggested_target"),
+        suggested_problem_type=response.get("suggested_problem_type")
+    )
+
+
+# ─── Export ───────────────────────────────────────────────────────────────────
+
+@app.post("/api/export")
+def export_model(req: ExportRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Training must be completed before export.")
+
+    inspection = {}
+    if job.get('inspection'):
+        try:
+            inspection = json.loads(job['inspection'])
+        except Exception:
+            pass
+
+    data_report = {}
+    if job.get('data_report'):
+        try:
+            data_report = json.loads(job['data_report'])
+        except Exception:
+            pass
+
+    results = []
+    if job.get('results'):
+        try:
+            results = json.loads(job['results'])
+        except Exception:
+            pass
+
+    if not results:
+        raise HTTPException(status_code=400, detail="No model results found.")
+
+    # Pick model (best or user-specified)
+    model_name = req.model_name
+    selected_result = None
+    if model_name:
+        for r in results:
+            if r['model_name'] == model_name:
+                selected_result = r
+                break
+        if not selected_result:
+            raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found in results.")
+    else:
+        selected_result = results[0]
+        model_name = selected_result['model_name']
+
+    problem_type = data_report.get('problem_type', job.get('problem_type', 'classification'))
+    metrics = selected_result.get('metrics', {})
+
+    # Generate files
+    artifact_dir = job.get('artifact_path')
+    safe_model_name = model_name.replace(' ', '_').lower()
+    artifact_path = os.path.join(artifact_dir, 'models', f'{safe_model_name}.joblib') if artifact_dir else None
+    if not artifact_path or not os.path.isfile(artifact_path):
+        raise HTTPException(status_code=409, detail="The trained model artifact is unavailable. Retrain this job before exporting.")
+    inference_code = generate_inference_code(model_name=model_name, problem_type=problem_type, metrics=metrics)
+    requirements_txt = generate_requirements()
+    readme_md = generate_readme(model_name=model_name, problem_type=problem_type, metrics=metrics)
+
+    # Pack into a ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("inference.py", inference_code)
+        zf.writestr("requirements.txt", requirements_txt)
+        zf.writestr("README.md", readme_md)
+        zf.write(artifact_path, "model.joblib")
+    zip_buffer.seek(0)
+
+    # Prefer a friendly filename based on the original uploaded dataset name.
+    orig_filename = job.get('original_filename') or job.get('file_path') or model_name
+    dataset_base = os.path.splitext(orig_filename)[0]
+    # Remove spaces, strip unsafe characters, and use lowercase — ensure no spaces remain
+    no_space = dataset_base.replace(' ', '_')
+    safe_dataset = re.sub(r'[^A-Za-z0-9_-]', '', no_space).lower()
+    # Fallback to sanitized model_name if dataset name becomes empty
+    if not safe_dataset:
+        safe_dataset = re.sub(r'[^A-Za-z0-9_-]', '', model_name.replace(' ', '_')).lower()
+    filename = f"SmartML-{safe_dataset}.zip"
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# ─── Mount Frontend Static Files ──────────────────────────────────────────────
+from fastapi.staticfiles import StaticFiles
+
+LEGACY_FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+REACT_DIST_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'code', 'dist'))
+FRONTEND_DIR = REACT_DIST_DIR if os.path.isdir(REACT_DIST_DIR) else LEGACY_FRONTEND_DIR
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

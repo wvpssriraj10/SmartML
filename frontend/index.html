@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0B0F19" />
+  <meta name="description" content="SmartML Dashboard — AI-Powered AutoML Platform" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>SmartML Dashboard | AutoML Platform</title>
+</head>
+<body>
+  <div id="root">
+    <!-- ═══ TOP NAV ═══ -->
+    <header class="topnav glass-strong" data-testid="top-nav">
+      <div class="topnav-inner">
+        <div class="topnav-left">
+          <div class="topnav-logo-wrap">
+            <div class="topnav-logo-glow"></div>
+            <div class="topnav-logo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+          </div>
+          <div class="topnav-brand">
+            <span class="topnav-title" data-testid="brand-logo">SmartML</span>
+            <span class="topnav-badge">AutoML</span>
+          </div>
+          <div class="topnav-links">
+            <span>Workspace</span>
+            <span>Runs</span>
+            <span>Models</span>
+          </div>
+        </div>
+        <div class="topnav-right">
+          <div class="status-badge" data-testid="status-badge" id="statusBadge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusLabel">Connecting</span>
+          </div>
+          <button class="btn-primary btn-sm" id="btnNewSession" data-testid="new-session-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            New Session
+          </button>
+          <div class="topnav-version">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            v2.0
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══ LAYOUT ═══ -->
+    <div class="app-layout">
+      <main class="main-workspace" data-testid="main-workspace" id="mainWorkspace">
+
+        <!-- ─── Phase Indicator ─── -->
+        <div class="phase-indicator" data-testid="phase-indicator" id="phaseIndicator"></div>
+
+        <!-- ════ PHASE 1: UPLOAD ════ -->
+        <div class="phase" id="phaseUpload" data-testid="upload-phase">
+          <div class="upload-header">
+            <div class="step-badge">
+              <span class="pulse-dot-sm"></span>
+              Step 01 · Upload Dataset
+            </div>
+            <h1 class="upload-title">
+              Drop your data.&nbsp;
+              <span class="gradient-text">We'll build the models.</span>
+            </h1>
+            <p class="upload-subtitle">
+              Upload a CSV, Excel, or JSON file. SmartML will inspect the schema, suggest a target, and race 10 models in parallel.
+            </p>
+          </div>
+
+          <div class="dropzone" id="dropzone" data-testid="upload-dropzone">
+            <div class="dropzone-bg-glow"></div>
+            <div class="dropzone-bg-glow-2"></div>
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json" hidden />
+            <div class="dropzone-empty" id="dropzoneEmpty">
+              <div class="dropzone-icon-wrap">
+                <svg class="dropzone-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              </div>
+              <div class="dropzone-title">Drag & drop your dataset</div>
+              <div class="dropzone-text">or click to browse — CSV, XLSX, XLS, JSON supported (max 500MB)</div>
+              <div class="dropzone-formats">
+                <div class="format-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> CSV</div>
+                <div class="format-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Excel</div>
+                <div class="format-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> JSON</div>
+              </div>
+              <button class="btn-primary" id="browseBtn" data-testid="browse-file-btn">Browse Files</button>
+            </div>
+            <div class="dropzone-progress hidden" id="dropzoneProgress">
+              <div class="progress-file-info">
+                <div class="progress-file-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div class="progress-file-details">
+                  <div class="progress-file-name" id="progressFileName"></div>
+                  <div class="progress-file-size" id="progressFileSize"></div>
+                </div>
+                <svg class="progress-check hidden" id="progressCheck" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar">
+                  <div class="progress-bar-fill" id="uploadProgressFill"></div>
+                </div>
+                <div class="progress-bar-labels">
+                  <span id="uploadStatus">Uploading...</span>
+                  <span id="uploadPercent">0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="upload-hints">
+            <div class="hint-card glass"><div class="hint-title">Auto Inspection</div><div class="hint-body">Column types, missing values, cardinality.</div></div>
+            <div class="hint-card glass"><div class="hint-title">Smart Target</div><div class="hint-body">AI suggests the best column to predict.</div></div>
+            <div class="hint-card glass"><div class="hint-title">10 Models</div><div class="hint-body">Race classical + boosted trees + neural.</div></div>
+          </div>
+          <div class="upload-error hidden" id="uploadError"></div>
+        </div>
+
+        <!-- ════ PHASE 2: ANALYZING ════ -->
+        <div class="phase hidden" id="phaseAnalyzing" data-testid="analyzing-phase">
+          <div class="analyzing-center">
+            <div class="analyzing-spinner-wrap">
+              <div class="analyzing-spinner-glow"></div>
+              <div class="analyzing-spinner">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"><path d="M12 3a6 6 0 006 6 6 6 0 01-6 6 6 6 0 01-6-6 6 6 0 016-6z"/></svg>
+              </div>
+            </div>
+            <h2 class="analyzing-title">Inspecting your dataset</h2>
+            <p class="analyzing-filename font-mono" id="analyzingFilename">dataset.csv</p>
+            <div class="analyzing-progress-wrap">
+              <div class="analyzing-progress-bar">
+                <div class="analyzing-progress-fill" id="analyzingProgressFill"></div>
+                <div class="analyzing-scan-bar"></div>
+              </div>
+              <div class="analyzing-progress-labels">
+                <span>Processing…</span>
+                <span id="analyzingPercent">0%</span>
+              </div>
+            </div>
+            <div class="analyzing-steps" id="analyzingSteps"></div>
+          </div>
+        </div>
+
+        <!-- ════ PHASE 3: CONFIG ════ -->
+        <div class="phase hidden" id="phaseConfig" data-testid="config-phase">
+          <div class="config-header">
+            <div>
+              <div class="step-badge"><span class="pulse-dot-sm"></span> Step 03 · Configure</div>
+              <h2 class="config-title">Dataset Overview</h2>
+              <p class="config-subtitle font-mono" id="configSubtitle"></p>
+            </div>
+          </div>
+
+          <div class="stats-grid" id="statsGrid"></div>
+
+          <div class="config-grid">
+            <div class="config-left">
+              <!-- Columns Table -->
+              <div class="card glass">
+                <div class="card-head"><h3 class="card-title">Columns</h3><span class="card-subtitle" id="colCountTag">0 detected</span></div>
+                <div class="table-wrap">
+                  <table class="data-table" id="columnsTable">
+                    <thead><tr><th>Column</th><th>Type</th><th>Missing</th><th>Unique</th></tr></thead>
+                    <tbody id="columnsTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Dataset Preview -->
+              <div class="card glass">
+                <div class="card-head"><h3 class="card-title">Dataset Preview</h3><span class="card-subtitle">First 10 rows</span></div>
+                <div class="table-wrap preview-wrap" id="previewWrap">
+                  <table class="data-table preview-table" id="previewTable">
+                    <thead id="previewTableHead"></thead>
+                    <tbody id="previewTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Visualization Explorer -->
+              <div class="card glass">
+                <div class="card-head">
+                  <h3 class="card-title">Visualization Explorer</h3>
+                  <select class="viz-select" id="distColSelect"></select>
+                </div>
+                <div class="chart-area">
+                  <canvas id="distChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-right">
+              <!-- Training Configuration -->
+              <div class="card glass">
+                <div class="card-head"><h3 class="card-title">Training Configuration</h3><span class="card-subtitle">Set target &  strategy</span></div>
+                <div class="ai-suggestion-box hidden" id="aiSuggestionBox">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  <div>
+                    <div class="ai-suggestion-text" id="aiSuggestionText">AI suggests target <span class="font-mono font-semibold" id="aiSuggestTarget"></span> for <span id="aiSuggestProblem"></span>.</div>
+                    <button class="ai-suggestion-apply" id="btnApplySuggest">Apply suggestion →</button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="field-label">Target Column</div>
+                  <select class="field-select" id="targetSelect"><option value="">Select column to predict…</option></select>
+                </div>
+
+                <div class="field">
+                  <div class="field-label">Problem Type</div>
+                  <div class="problem-toggles" id="problemToggles">
+                    <button class="toggle-btn active" data-value="">Auto</button>
+                    <button class="toggle-btn" data-value="classification">Classification</button>
+                    <button class="toggle-btn" data-value="regression">Regression</button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="field-label">Model Strategy</div>
+                  <select class="field-select" id="strategySelect">
+                    <option value="smart">Smart Auto-Pick (Recommended)</option>
+                    <option value="all">Train All Models</option>
+                  </select>
+                </div>
+
+                <button class="btn-training" id="btnStartTraining" data-testid="start-training-btn">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/></svg>
+                  Start Training
+                </button>
+                <div class="training-hint">10 models · ~30-60s on this dataset</div>
+              </div>
+
+              <!-- Session Summary -->
+              <div class="card glass">
+                <div class="card-head"><h3 class="card-title">Session Summary</h3></div>
+                <div class="summary-rows" id="summaryRows"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════ PHASE 4: TRAINING ════ -->
+        <div class="phase hidden" id="phaseTraining" data-testid="training-phase">
+          <div class="training-header">
+            <div>
+              <div class="step-badge"><span class="pulse-dot-sm"></span> Step 04 · Training</div>
+              <h2 class="training-title">Racing 10 models in parallel</h2>
+              <p class="training-subtitle" id="trainingSubtitle">Target: <span class="font-mono text-slate-200" id="trainingTarget"></span> · Type: <span class="font-mono text-slate-200" id="trainingType"></span></p>
+            </div>
+          </div>
+
+          <div class="training-grid">
+            <div class="training-ring-card glass">
+              <div class="ring-bg-glow"></div>
+              <div class="progress-ring-wrap">
+                <svg class="progress-ring" width="180" height="180" viewBox="0 0 180 180">
+                  <circle class="ring-bg" cx="90" cy="90" r="72" />
+                  <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="72" />
+                </svg>
+                <div class="ring-center">
+                  <div class="ring-percent" id="ringPercent">0%</div>
+                  <div class="ring-label">Complete</div>
+                </div>
+              </div>
+              <div class="training-elapsed" id="trainingElapsed">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="font-mono text-lg" id="elapsedDisplay">0s</span>
+              </div>
+              <div class="training-model-count font-mono" id="trainingModelCount">0 / 10 models complete</div>
+            </div>
+
+            <div class="training-terminal-card glass">
+              <div class="terminal-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                <span class="terminal-label">Live Terminal</span>
+                <span class="terminal-worker">worker://smartml-orchestrator</span>
+              </div>
+              <div class="terminal-log" id="liveLog"></div>
+            </div>
+          </div>
+
+          <div class="training-warning hidden" id="trainingWarning">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <div>
+              <div class="warning-title">Training is taking a bit longer than usual</div>
+              <div class="warning-body">This can happen with larger datasets, high-cardinality target classes, or when strategy = Thorough. Hang tight — champion models are usually last.</div>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+              <h3 class="card-title">Model Fleet</h3>
+            </div>
+            <div class="model-fleet" id="modelFleet"></div>
+          </div>
+        </div>
+
+        <!-- ════ PHASE 5: RESULTS ════ -->
+        <div class="phase hidden" id="phaseResults" data-testid="results-phase">
+          <div class="results-header">
+            <div>
+              <div class="step-badge"><span class="pulse-dot-sm"></span> Step 05 · Results</div>
+              <h2 class="results-title">Training Complete</h2>
+              <p class="results-subtitle" id="resultsSubtitle"></p>
+            </div>
+            <div class="results-actions">
+              <button class="btn-secondary" id="btnNewFromResults">New Session</button>
+              <button class="btn-primary" id="btnExport">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Export Best Model
+              </button>
+            </div>
+          </div>
+
+          <!-- Champion Card -->
+          <div class="champion-card" id="championCard">
+            <div class="champion-glow"></div>
+            <div class="champion-inner">
+              <div class="champion-badge-wrap">
+                <div class="champion-badge">🏆</div>
+              </div>
+              <div class="champion-info">
+                <div class="champion-name" id="bestModelName">—</div>
+                <div class="champion-meta" id="bestModelMeta">—</div>
+                <div class="champion-metrics" id="bestMetrics"></div>
+              </div>
+              <button class="btn-primary" id="btnExportHero">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Download Deployable Code
+              </button>
+            </div>
+          </div>
+
+          <div class="results-grid">
+            <!-- Leaderboard -->
+            <div class="card glass">
+              <div class="card-head"><h3 class="card-title">Model Leaderboard</h3><span class="card-subtitle" id="leaderboardCount">0 models</span></div>
+              <div class="leaderboard-list" id="leaderboardList"></div>
+            </div>
+
+            <!-- Chart -->
+            <div class="card glass">
+              <div class="card-head">
+                <h3 class="card-title">Performance Comparison</h3>
+                <div class="chart-toggles" id="chartToggles"></div>
+              </div>
+              <div class="chart-area">
+                <canvas id="metricsChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Distribution Explorer -->
+            <div class="card glass" style="grid-column: 1 / -1;">
+              <div class="card-head">
+                <h3 class="card-title">Dataset Key KPI Distributions Explorer</h3>
+                <select class="viz-select" id="resultsDistColSelect"></select>
+              </div>
+              <div class="chart-area">
+                <canvas id="resultsDistChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- ═══ AI SIDEBAR ═══ -->
+      <aside class="ai-sidebar" id="aiSidebar">
+        <div class="card glass-strong ai-chat-card">
+          <div class="ai-header">
+            <div class="ai-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+            <div>
+              <div class="ai-name">AI Assistant</div>
+              <div class="ai-status">Online</div>
+            </div>
+            <span class="tag green">Live</span>
+          </div>
+
+          <div class="ai-suggestions" id="aiSuggestions"></div>
+
+          <div class="ai-messages" id="chatMessages">
+            <div class="chat-bubble assistant">
+              <div class="chat-avatar">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              </div>
+              <div class="chat-text">👋 Hi! Upload a dataset to get started. I'll help you pick a target, understand your data, and explain results.</div>
+            </div>
+          </div>
+
+          <div class="ai-input-wrap">
+            <input type="text" class="ai-input" id="chatInput" placeholder="Ask about your dataset, targets or models…" />
+            <button class="ai-send-btn" id="chatSendBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+DataSense / SmartML Dashboard
+Reference UI & Feature Teardown — for build/IDE handoff
+Source: screen-recorded walkthrough of a reference implementation (video, ~7m16s, localhost:3000). Frames extracted and analyzed directly; all screenshots below are stills from that recording.
+1. Purpose of this document
+This document exists to give an IDE / coding agent (and any developer) a complete, screenshot-grounded spec of a reference AutoML/data-analytics product called "DataSense", so its features can be evaluated against and folded into an existing build (working name: SmartML Dashboard). It is organized by screen/route, with what's on each screen, what it implies about data model and API surface, and how it differs from the original 6-step build prompt this project started from.
+Read this alongside the original prompt (six-step flow: Upload → Analyzing → Dataset Config → Training → Results, with a persistent AI Assistant sidebar). Anything below not covered by that prompt is a genuine gap or an upgrade opportunity — called out explicitly in each section.
+2. High-level architecture difference
+The most important structural finding: the reference app is NOT a single-page 6-step wizard. It is a multi-route application with a persistent top navigation bar (Home, Upload, Cleaning, Visualization, Feature Analysis, AI Insights, Predictions) and its own client-side routing:
+/signin — auth
+/ (home) — marketing landing page
+/upload — dataset upload + dataset library
+/preview?datasetId=N — dataset preview + row browser
+/cleaning?datasetId=N — Data Cleaning Studio
+/visualization?datasetId=N — chart builder
+/feature-analysis?datasetId=N — feature relationships & redundancy
+/ai-insights?datasetId=N — AI-generated analytics + PDF export
+/predictions?datasetId=N — model training / forecasting
+Each dataset is a persistent object (datasetId), not a transient job_id tied to one session. Users can navigate away and resume. This is a bigger decision than a UI tweak — it changes the backend data model from "job" to "dataset" as the core entity, with jobs/runs as children of a dataset.
+3. Screen-by-screen breakdown
+3.1 Sign In (/signin) — NOT in original spec
+Fig 1. Sign-in screen. Dark background (brick photo texture, heavily darkened), centered glass-panel card.
+Fields: Username, Password (with show/hide toggle), "Remember me" checkbox, "Forgot password?" link, primary Login button (white pill, full width), secondary "Register" link below.
+Decide deliberately whether the build needs auth at all for a portfolio demo, or whether this is skipped in favor of a single implicit session.
+If added: needs /signin, /register, forgot-password flow, and a session/JWT layer gating all other routes.
+3.2 Landing / Home (/) — NOT in original spec
+Fig 2. Hero section: headline "Turn raw data into clear decisions", subtext, two CTAs ("Get started free", "See how it works"), isometric illustration on the right.
+Fig 3. Feature grid section ("Everything you need in one workspace"): cards for CSV Upload, AI Cleaning, Smart Insights, Feature Analysis, Predictions, Visualization, Export Reports, Secure & Private — each a short label + one-line description.
+Also present further down (seen in scrub, not screenshotted in full): a pricing section with Free / Pro / Enterprise tiers. Irrelevant to core functionality but confirms this is built/positioned as a SaaS product, not just a demo tool — informs whether you want a marketing shell around your app.
+3.3 Upload & Dataset Library (/upload)
+Fig 4. Upload screen: drag-and-drop zone with cloud icon, "Choose File" button, supported formats note (CSV, Excel, JSON, Max 100MB).
+Fig 5. Below the upload zone: "Your Datasets" library, split into an in-progress section and a "Finalized Datasets" section.
+Per-dataset row shows: file-type icon, filename, status badge (IN PROGRESS / FINALIZED), file type + size + upload date, "N cleaning steps saved", row count, column count, and action buttons that change by status:
+In progress: Preview · Continue Cleaning · Delete
+Finalized: Re-upload original file · View charts · Delete
+This confirms cleaning state is saved per-dataset and resumable — matches the architecture note in section 2.
+3.4 Dataset Preview (/preview)
+Fig 6. Row-level table view: Customer_ID, Age, Gender, City, Annual_Income, Spending_Score columns shown, with "Rows X–Y of N" label, a rows-per-page selector, and numbered pagination (1, 2, 3 … 164).
+Bottom of the page has a "Ready to clean your data?" prompt with a gradient "Start Cleaning" button — this is the bridge into the Cleaning Studio. Original spec's "Dataset Preview" was a static first-10-rows card; this is a full paginated table browser.
+3.5 Data Cleaning Studio (/cleaning) — biggest gap vs. original spec
+Fig 7. Full cleaning workbench layout, three-column body under a metrics strip.
+Fig 8. Pipeline breadcrumb at top of page: numbered chips (1, 2, 3, 4…) each showing the action + target column (e.g. "Cap Outliers · Annual_Income"), connected left-to-right — a visible, sequential history of every cleaning step applied so far.
+Page header includes dataset name, an "N steps applied" badge, and a gear/pipeline icon block.
+Metrics strip (5 cards)
+Columns — total column count
+Total Values — total cell count
+Missing — missing cell count
+Outliers — detected outlier count
+Numeric / Categorical — column type split
+Left panel — Columns list
+Every column listed with its detected type icon (# numeric / Aa categorical) and a status chip: a green "✓ Cleaned" tag once addressed, or a red count badge ("Missing 39", "Outliers 8") while unresolved. Clicking a column presumably scopes the middle panel's actions to it.
+Middle panel — Cleaning Actions
+Drop Duplicates — remove duplicate rows
+Replace Values — on the selected column
+Handle Missing Values — with a strategy selector (e.g. Mean)
+Handle Outliers — with a strategy selector (e.g. Cap)
+Encoding — for categorical columns
+Right panel — Utility & Dataset Controls
+Drop Column (destructive, shown in red) — targets the currently selected column
+Preview Data — inline preview button
+Undo Last Step
+Download CSV — export current cleaned state
+Finalize Dataset — locks the dataset, moves it to "Finalized" in the library
+Implied backend surface for this screen alone:
+POST /api/datasets/{id}/cleaning/actions
+  { "action": "drop_duplicates" | "replace_values" | "handle_missing"
+             | "handle_outliers" | "encode" | "drop_column",
+    "column": "Annual_Income", "strategy": "mean" | "cap" | ... }
+  -> { "step_id", "pipeline": [...], "metrics": {...} }
+
+POST /api/datasets/{id}/cleaning/undo   -> { "pipeline": [...] }
+GET  /api/datasets/{id}/cleaning/download -> CSV blob
+POST /api/datasets/{id}/finalize        -> { "status": "finalized" }
+3.6 Visualization (/visualization) — upgrade vs. original spec
+Fig 9. Column-X and Column-Y selectors on the left, each with a Categorical/Numerical toggle and an auto-detected type label ("Detected: Numerical"). Right side: six chart-type cards (Bar Chart, Line Graph, Scatter Plot, Histogram, Pie Chart, Heat Map), each with a one-line description and a small preview glyph. Selected type is outlined + check-marked.
+Fig 10. Chart Output area after "Generate Chart": renders via a stated charting library ("Recharts" tag visible next to a row-count tag), with an "Expand" control for full-screen view.
+Original spec: one dropdown, one column, one auto-rendered distribution. Reference app: full bivariate exploration (X vs Y, 6 chart types, explicit generate action, expand-to-fullscreen). This is a meaningfully bigger visualization module than what was originally scoped.
+3.7 Feature Analysis (/feature-analysis) — NOT in original spec
+Fig 11. Three-panel layout: "Redundant Features" (left, pairs of highly-correlated columns with a similarity % and bar), "AI Feature Suggestions" (middle, AI-generated derived-feature ideas — e.g. a ratio feature or interaction term — each with a confidence ring and a "Generate Feature" button), "Dataset Readiness" (right, a circular ML-readiness score with a checklist: dataset loaded, relationships found, quality checks passed, numeric features present, ML-ready status).
+This is a dedicated pre-training diagnostics step: it tells the user which columns are redundant and offers to synthesize new features before they hit Train. Nothing like this exists in the original spec — closest analog is the AI-suggestion banner in Step 3, but that's target-column suggestion only, not feature engineering.
+3.8 AI Insights (/ai-insights) — spec has a banner, reference has a full module
+Fig 12. Section intro: "AI Insights" headline, description, and a single "Generate Report" action that kicks off analysis ("Analyzing your dataset..." loading state).
+Fig 13. Top metric row (Dataset Correlation, Data Completeness, Risk Level, Data Quality Score, each with a supporting stat like "207 transactions analyzed" and a trend note) followed by a "Comprehensive Intelligence" grid: Missing Values %, Duplicates, Categorical Features count, Numerical Features count, Anomalies Detected count, Strong Correlations (pair count).
+Fig 14. "Processing Summary" + "Data Quality Metrics": Missing Values Fixed / Outliers Removed / Duplicates Removed / Columns Processed counters, plus Completeness / Consistency / Validity progress bars with percentages.
+Also generates a narrative section, "The Data Story" — an auto-written paragraph in plain English summarizing the dataset (row/column counts, general character of the data, e.g. "business operational data"), followed by an "Executive Summary" block. See section 3.10 for the exported PDF version.
+3.9 Business Risk Assessment (part of AI Insights flow)
+Fig 15. "Overall Risk Assessment" — a circular score/gauge (e.g. "3"), followed by "Risk Breakdown by Category": Revenue Risk, Expense Risk, Operational Risk, Data Quality Risk, each as a labeled progress bar. Below that, a "Recommended Actions" list (short imperative bullets, e.g. conduct a review, implement a monitoring dashboard, schedule a data-quality audit).
+This reframes part of the tool from "train a model" to "assess business risk from this dataset." Bigger scope than the original spec intended — flag as an explicit scope decision, not an assumed add-on.
+3.10 Anomaly Detection Report (part of AI Insights flow)
+Fig 16. Dedicated anomaly table: Total Anomalies / Critical Issues / Warning Issues counters, then a row-level table — Record ID, Metric, Actual Value, Expected Range, Severity (badge: CRITICAL/WARNING) — for every flagged record.
+Distinct from the aggregate "Anomalies Detected" count on the main AI Insights grid — this is the drill-down, row-by-row view.
+3.11 Exported PDF Report — genuinely new deliverable, not in spec
+Fig 17. "Generate Report" produces a real downloadable PDF (seen opened in a new browser tab: AI_Insights_Report_{datasetId}.pdf). Contains: title, dataset name, "The Data Story" narrative panel, "Executive Summary", and further down the same Processing Summary metrics seen in-app.
+This is worth building: it demonstrates the product can turn model/analysis output into a shareable, non-technical document — a strong signal in a portfolio context, and moderate effort if you're already computing the underlying stats (server-side HTML → PDF, e.g. via a headless-browser render or a PDF templating library).
+3.12 Predictions (/predictions) — different problem type than original spec, not just a UI variant
+Fig 18. "Predictive Intelligence" header ("Leverage advanced XGBoost and gradient ensemble models to forecast metrics with high accuracy"). "Model Configuration" panel: Active Dataset dropdown, Target Variable dropdown, "Run Prediction Model" button. On run: circular loading state with status text ("Initializing compute cluster...", "Fitting gradient ensemble models..."), then a "Training Model..." button label.
+Fig 19. Result state: four metric cards — Model Accuracy %, R² Score, Error Margin %, Confidence Rating (text label such as "Very Good" / "Excellent" / "Outstanding") — followed by a "Historical vs Future Forecasted" line chart. The line is solid for historical actuals and switches to a dotted purple line for the forecast horizon (axis labeled Day 3 → Day 55 (Forecast)), with a hoverable tooltip on forecast points (e.g. "Day 45 (Forecast): 0.41").
+Below the chart: "Model Architecture & Forecasting Explanation" — an auto-generated plain-English paragraph naming the actual algorithm (e.g. "Extreme Gradient Boosting (XGBoost) Regression integrated with Gradient Boosted Decision Trees") and why it was chosen.
+Important distinction — flag this clearly to whoever scopes the build:
+Original spec's Step 4/5 = classic AutoML: train 10 named models (Logistic/Ridge Regression, Decision Tree, Random Forest, Gradient Boosting, XGBoost, LightGBM, SVM, KNN, Neural Net), rank by classification/regression metrics on a leaderboard.
+Reference app's Predictions screen = single-model time-series forecasting: one active model, a forecast horizon in days, historical-vs-future chart. This is a different ML problem type (forecasting vs. tabular classification/regression), not a restyled leaderboard.
+Do not assume the leaderboard UI and the forecast UI are interchangeable skins on the same backend — they require different pipelines. Decide whether to build both, replace one with the other, or keep the original leaderboard and add model-explanation text only (cheapest, still valuable).
+4. Design system reference (extracted from frames)
+4.1 Color palette
+4.2 Typography
+Headline / display: bold geometric sans-serif, wide letter-spacing on the "DATA SENSE" logotype specifically (looks like a display/tech font, letters spaced out — not the same font as body copy).
+Body / UI: clean grotesque sans-serif (rounded terminals visible on lowercase a/e) — consistent with something in the Inter / General Sans / Manrope family; exact font not verifiable from screenshots alone.
+Numeric metrics (stat cards): large bold weight, tight tracking, often gradient-filled text on hero stats (e.g. accuracy %, confidence rating).
+Recommend confirming exact font family by inspecting computed styles in devtools if pixel-perfect matching matters; otherwise Inter (UI) + a wide-tracking display face for the logo is a safe close match.
+4.3 Visual language / effects
+Dark glassmorphism: translucent panels with subtle blur and thin light borders over the dark background (most visible on the login card over the brick photo).
+Glow accents: soft violet glow/shadow around primary buttons and active nav pills.
+Rounded corners throughout — cards, buttons, inputs all use a consistent medium radius (approx 12–16px).
+Gradient buttons (violet → indigo) reserved for primary/high-commitment actions: Start Cleaning, Start Training/Run Prediction Model, Start Free Trial.
+Status badges are pill-shaped, color-coded by state (green = good/cleaned, amber = warning/in progress, red = critical/error).
+Subtle dot-grid background texture on darker empty sections (visible behind cards in Feature Analysis, Visualization output panels).
+Persistent top nav bar stays fixed across all authenticated routes, with the active section highlighted as a filled pill.
+5. Summary: what to add, by priority
+— End of document —
