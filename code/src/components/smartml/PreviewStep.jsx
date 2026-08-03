@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Table, Search, ChevronLeft, ChevronRight, SlidersHorizontal, ArrowRight, Download } from "lucide-react";
+import { API_BASE } from "@/api";
 
 export function PreviewStep({ datasetId, onNavigateToCleaning }) {
   const [data, setData] = useState(null);
@@ -16,7 +17,7 @@ export function PreviewStep({ datasetId, onNavigateToCleaning }) {
     }
     setLoading(true);
     try {
-      const url = new URL(`http://localhost:8000/api/datasets/${datasetId}/preview`);
+      const url = new URL(`${API_BASE}/datasets/${datasetId}/preview`);
       url.searchParams.append("page", page);
       url.searchParams.append("page_size", pageSize);
       if (search) url.searchParams.append("search", search);

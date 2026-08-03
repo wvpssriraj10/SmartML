@@ -3,6 +3,7 @@ import {
   Brain, Download, ShieldAlert, CheckCircle2, AlertTriangle, 
   Sparkles, Layers, TrendingUp, BarChart, FileText, ArrowUpRight, Zap
 } from "lucide-react";
+import { API_BASE } from "@/api";
 
 export function AiInsightsStep({ datasetId }) {
   const [data, setData] = useState(null);
@@ -15,7 +16,7 @@ export function AiInsightsStep({ datasetId }) {
     }
     const fetchInsights = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}/ai-insights`);
+        const res = await fetch(`${API_BASE}/datasets/${datasetId}/ai-insights`);
         if (res.ok) {
           const json = await res.json();
           setData(json.insights);
@@ -31,7 +32,7 @@ export function AiInsightsStep({ datasetId }) {
 
   const handleDownloadPdf = () => {
     if (!datasetId) return;
-    window.open(`http://localhost:8000/api/datasets/${datasetId}/pdf-report`);
+    window.open(`${API_BASE}/datasets/${datasetId}/pdf-report`);
   };
 
   if (loading) {

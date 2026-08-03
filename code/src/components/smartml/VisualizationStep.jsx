@@ -3,6 +3,7 @@ import {
   BarChart2, ScatterChart, LineChart as LineChartIcon, PieChart as PieChartIcon,
   LayoutGrid, Flame, RefreshCw, BarChart3
 } from "lucide-react";
+import { API_BASE } from "@/api";
 import {
   BarChart, Bar, LineChart, Line, ScatterChart as RechartsScatter, Scatter,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -52,8 +53,8 @@ export function VisualizationStep({ datasetId }) {
     const fetchMeta = async () => {
       try {
         const [detailRes, previewRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/datasets/${datasetId}`),
-          fetch(`http://localhost:8000/api/datasets/${datasetId}/preview?page=1&page_size=${maxRows}`),
+          fetch(`${API_BASE}/datasets/${datasetId}`),
+          fetch(`${API_BASE}/datasets/${datasetId}/preview?page=1&page_size=${maxRows}`),
         ]);
         if (detailRes.ok) {
           const detail = await detailRes.json();

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { 
+import {
   SlidersHorizontal, CheckCircle2, AlertTriangle, Trash2, RotateCcw, 
   Download, Lock, Sparkles, Hash, Type, ChevronRight, Layers, ArrowRight, Eye
 } from "lucide-react";
+import { API_BASE } from "@/api";
 
 export function CleaningStep({ datasetId, onNavigateToPreview }) {
   const [dataset, setDataset] = useState(null);
@@ -25,7 +26,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
       return;
     }
     try {
-      const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}`);
+      const res = await fetch(`${API_BASE}/datasets/${datasetId}`);
       if (res.ok) {
         const data = await res.json();
         setDataset(data);
@@ -58,7 +59,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
         column: selectedColumn,
         ...extraParams
       };
-      const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}/cleaning/actions`, {
+      const res = await fetch(`${API_BASE}/datasets/${datasetId}/cleaning/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -89,7 +90,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
     if (!datasetId || dataset?.status === 'finalized') return;
     setActionLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}/cleaning/undo`, {
+      const res = await fetch(`${API_BASE}/datasets/${datasetId}/cleaning/undo`, {
         method: "POST"
       });
       if (res.ok) {
@@ -114,7 +115,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
   const handleFinalize = async () => {
     if (!datasetId) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}/finalize`, {
+      const res = await fetch(`${API_BASE}/datasets/${datasetId}/finalize`, {
         method: "POST"
       });
       if (res.ok) {
@@ -187,7 +188,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.open(`http://localhost:8000/api/datasets/${datasetId}/download`)}
+              onClick={() => window.open(`${API_BASE}/datasets/${datasetId}/download`)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/60 px-3 py-1.5 text-xs font-medium hover:bg-accent transition"
             >
               <Download className="h-3.5 w-3.5" />

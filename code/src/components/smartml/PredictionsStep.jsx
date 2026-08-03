@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { TrendingUp, Cpu, Zap, Target, CheckCircle2, ArrowRight, BarChart3 } from "lucide-react";
+import { API_BASE } from "@/api";
 
 const MODEL_CARDS = [
   { name: "Logistic Regression",   type: "Classification", icon: "📊", speed: "Fast",   note: "Great baseline for binary targets" },
@@ -22,7 +23,7 @@ export function PredictionsStep({ datasetId, onNavigateToHome }) {
     if (!datasetId) { setLoading(false); return; }
     const fetch_ = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/datasets/${datasetId}`);
+        const res = await fetch(`${API_BASE}/datasets/${datasetId}`);
         if (res.ok) setDataset(await res.json());
       } catch (e) {
         console.error(e);

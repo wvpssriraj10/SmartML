@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Sparkle, AlertTriangle, CheckCircle2, Info, TrendingUp, Hash, Type } from "lucide-react";
+import { API_BASE } from "@/api";
 
 const PALETTE = [
   "#6366f1","#10b981","#f59e0b","#ef4444","#3b82f6",
@@ -36,8 +37,8 @@ export function FeatureAnalysisStep({ datasetId }) {
     const load = async () => {
       try {
         const [detRes, pvRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/datasets/${datasetId}`),
-          fetch(`http://localhost:8000/api/datasets/${datasetId}/preview?page=1&page_size=1000`),
+          fetch(`${API_BASE}/datasets/${datasetId}`),
+          fetch(`${API_BASE}/datasets/${datasetId}/preview?page=1&page_size=1000`),
         ]);
 
         if (detRes.ok) setDataset(await detRes.json());

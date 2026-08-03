@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
   component: SmartMLApp,
 });
 
-const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "@/api";
 const MODEL_NAMES = [
   "Logistic Regression",
   "Ridge Regression",

@@ -4,7 +4,8 @@ import {
   Eye, BarChart3, Database, Loader2, AlertCircle
 } from "lucide-react";
 
-const API = "http://localhost:8000/api";
+import { API_BASE } from "@/api";
+
 const ACCEPTED = [".csv", ".xlsx", ".xls", ".json"];
 
 export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigateToCleaning, onNavigateToVisualization }) {
@@ -55,7 +56,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
   // ── fetch library ──────────────────────────────────────────────────────────
   const fetchLibrary = async () => {
     try {
-      const res = await fetch(`${API}/datasets`);
+      const res = await fetch(`${API_BASE}/datasets`);
       if (res.ok) {
         const json = await res.json();
         setDatasets(json.datasets || []);
@@ -86,7 +87,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${API}/upload`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: fd });
       clearInterval(ticker);
 
       if (!res.ok) {
@@ -137,7 +138,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
   const handleDelete = async (datasetId) => {
     if (!confirm("Delete this dataset and all its cleaning history?")) return;
     try {
-      await fetch(`${API}/datasets/${datasetId}`, { method: "DELETE" });
+      await fetch(`${API_BASE}/datasets/${datasetId}`, { method: "DELETE" });
       setDatasets(prev => prev.filter(d => d.id !== datasetId));
     } catch { /* ignore */ }
   };
