@@ -14,7 +14,7 @@ MODEL_REGISTRY = {
     'classification': {
         'Logistic Regression': {
             'model': LogisticRegression,
-            'params': {'max_iter': 1000, 'random_state': 42, 'n_jobs': -1}
+            'params': {'max_iter': 300, 'random_state': 42, 'n_jobs': 1}
         },
         'Ridge Classifier': {
             'model': RidgeClassifier,
@@ -26,7 +26,7 @@ MODEL_REGISTRY = {
         },
         'Random Forest': {
             'model': RandomForestClassifier,
-            'params': {'random_state': 42, 'n_jobs': -1, 'n_estimators': 100}
+            'params': {'random_state': 42, 'n_jobs': 1, 'n_estimators': 50}
         },
         'Gradient Boosting': {
             'model': GradientBoostingClassifier,
@@ -34,11 +34,11 @@ MODEL_REGISTRY = {
         },
         'XGBoost': {
             'model': xgb.XGBClassifier,
-            'params': {'random_state': 42, 'n_jobs': -1, 'verbosity': 0}
+            'params': {'random_state': 42, 'n_jobs': 1, 'nthread': 1, 'verbosity': 0}
         },
         'LightGBM': {
             'model': lgb.LGBMClassifier,
-            'params': {'random_state': 42, 'n_jobs': -1, 'verbose': -1}
+            'params': {'random_state': 42, 'n_jobs': 1, 'num_threads': 1, 'verbose': -1}
         },
         'SVM': {
             'model': SVC,
@@ -46,11 +46,11 @@ MODEL_REGISTRY = {
         },
         'KNN': {
             'model': KNeighborsClassifier,
-            'params': {'n_jobs': -1}
+            'params': {'n_jobs': 1}
         },
         'Neural Net': {
             'model': MLPClassifier,
-            'params': {'random_state': 42, 'max_iter': 500}
+            'params': {'random_state': 42, 'max_iter': 300}
         },
         'Naive Bayes': {
             'model': GaussianNB,
@@ -72,7 +72,7 @@ MODEL_REGISTRY = {
         },
         'Random Forest': {
             'model': RandomForestRegressor,
-            'params': {'random_state': 42, 'n_jobs': -1, 'n_estimators': 100}
+            'params': {'random_state': 42, 'n_jobs': 1, 'n_estimators': 50}
         },
         'Gradient Boosting': {
             'model': GradientBoostingRegressor,
@@ -80,11 +80,11 @@ MODEL_REGISTRY = {
         },
         'XGBoost': {
             'model': xgb.XGBRegressor,
-            'params': {'random_state': 42, 'n_jobs': -1, 'verbosity': 0}
+            'params': {'random_state': 42, 'n_jobs': 1, 'nthread': 1, 'verbosity': 0}
         },
         'LightGBM': {
             'model': lgb.LGBMRegressor,
-            'params': {'random_state': 42, 'n_jobs': -1, 'verbose': -1}
+            'params': {'random_state': 42, 'n_jobs': 1, 'num_threads': 1, 'verbose': -1}
         },
         'SVM': {
             'model': SVR,
@@ -92,11 +92,11 @@ MODEL_REGISTRY = {
         },
         'KNN': {
             'model': KNeighborsRegressor,
-            'params': {'n_jobs': -1}
+            'params': {'n_jobs': 1}
         },
         'Neural Net': {
             'model': MLPRegressor,
-            'params': {'random_state': 42, 'max_iter': 500}
+            'params': {'random_state': 42, 'max_iter': 300}
         }
     }
 }

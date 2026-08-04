@@ -65,6 +65,7 @@ function SmartMLApp() {
 
   const timerRef = useRef(null);
   const pollRef = useRef(null);
+  const stallWarnedRef = useRef(false);
 
   useEffect(() => {
     const check = async () => {
@@ -245,6 +246,7 @@ function SmartMLApp() {
   const startPollingTraining = (activeJobId) => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (pollRef.current) window.clearInterval(pollRef.current);
+    stallWarnedRef.current = false;
 
     timerRef.current = window.setInterval(() => {
       setTrainingElapsed((v) => v + 1);
@@ -296,6 +298,14 @@ function SmartMLApp() {
           window.clearInterval(pollRef.current);
           window.clearInterval(timerRef.current);
           pushAssistant(`Training failed: ${data.message || "Unknown error"}`);
+        }
+
+        if ((data.status === "running" || data.status === "queued") && completedCount === 0) {
+          const noLogs = !data.logs || data.logs.length === 0;
+          if (trainingElapsed > 90 && !stallWarnedRef.current && (noLogs || data.progress?.percent === 0)) {
+            stallWarnedRef.current = true;
+            pushAssistant("Still waiting for the first model to report back — on the free tier the backend may be spinning up or the worker may have hit a memory limit. If this persists past a few minutes, restart training.");
+          }
         }
       } catch (err) {
         pushAssistant(`Status check error: ${err.message}`);
