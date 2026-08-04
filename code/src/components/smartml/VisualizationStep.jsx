@@ -281,7 +281,12 @@ export function VisualizationStep({ datasetId }) {
             {CHART_TYPES.map(({ key, label, Icon }) => (
               <button
                 key={key}
-                onClick={() => setChartType(key)}
+                onClick={() => {
+                  setChartType(key);
+                  if (key === "histogram" && meta.numeric_cols?.length && !meta.numeric_cols.includes(xCol)) {
+                    setXCol(meta.numeric_cols[0]);
+                  }
+                }}
                 className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition ${
                   chartType === key
                     ? "border-primary bg-primary/15 text-primary shadow-sm"
@@ -306,7 +311,7 @@ export function VisualizationStep({ datasetId }) {
               onChange={e => setXCol(e.target.value)}
               className="w-full bg-card border border-border/80 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
             >
-              {meta.columns.map(c => <option key={c} value={c}>{c}</option>)}
+              {(chartType === "histogram" && meta.numeric_cols?.length ? meta.numeric_cols : meta.columns).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -335,12 +340,20 @@ export function VisualizationStep({ datasetId }) {
               ? `Composition of "${xCol}"`
               : `"${xCol}" vs "${yCol}"`}
           </h3>
-          <span className="text-xs text-muted-foreground font-mono">{chartData.length} data points</span>
+          <span className="text-xs text-muted-foreground font-mono">
+            {chartType === "histogram" ? `${chartData.length} buckets` : `${chartData.length} data points`}
+          </span>
         </div>
 
         {chartData.length === 0 ? (
-          <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-            No numeric data available for the selected columns and chart type.
+          <div className="flex h-48 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            {chartType === "histogram" ? (
+              meta.numeric_cols?.length
+                ? `"${xCol}" has no numeric values — select a numeric column (${meta.numeric_cols.join(", ")}) to draw the histogram.`
+                : "This dataset has no numeric columns, so a histogram can't be drawn. Use Bar or Pie charts instead."
+            ) : (
+              "No numeric data available for the selected columns and chart type."
+            )}
           </div>
         ) : (
           renderChart()
