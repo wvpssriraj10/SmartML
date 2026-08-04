@@ -1,0 +1,15 @@
+name: Keep Render Backend Awake
+
+on:
+  schedule:
+    # Ping every 10 minutes so the Render free instance never spins down.
+    # Render free tier gives 750 hrs/month; 24/7 uptime uses ~720 hrs.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping SmartML backend health endpoint
+        run: curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" https://smartml-backend.onrender.com/api/health
