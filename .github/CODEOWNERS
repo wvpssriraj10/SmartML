@@ -1,0 +1,15 @@
+# CODEOWNERS - specify team or user responsible for code areas
+# Use GitHub usernames
+
+# Frontend
+/code/ @wvpssriraj10
+
+# Backend and ML engine
+/backend/ @wvpssriraj10
+/ml_engine/ @wvpssriraj10
+
+# Repo config and workflows
+.github/ @wvpssriraj10
+
+# Default fallback: repository owner
+* @wvpssriraj10
