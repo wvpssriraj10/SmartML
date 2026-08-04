@@ -4,9 +4,34 @@ import os
 import joblib
 import re
 import numpy as np
+import pandas as pd
 from .preprocessing import DatasetInspector, Preprocessor
 from .models import MODEL_REGISTRY, get_smart_models, train_model
 from .metrics import compute_classification_metrics, compute_regression_metrics, rank_models
+
+# Cap rows used for training. Free-tier hosts (512 MB) cannot hold huge datasets
+# plus every fitted model in memory. Inspect the full file; train on a sample.
+MAX_TRAIN_ROWS = 15000
+
+
+def _subsample_for_training(df, target_column, limit=MAX_TRAIN_ROWS):
+    if len(df) <= limit:
+        return df, None
+    classes = df[target_column] if target_column in df.columns else None
+    if classes is not None and classes.nunique() <= 100:
+        try:
+            per_class = max(1, limit // max(classes.nunique(), 1))
+            sample = pd.concat([
+                g.sample(min(len(g), per_class), random_state=42)
+                for _, g in df.groupby(target_column)
+            ])
+            if len(sample) > limit:
+                sample = sample.sample(n=limit, random_state=42)
+            return sample.reset_index(drop=True), len(df)
+        except Exception:
+            pass
+    sample = df.sample(n=min(limit, len(df)), random_state=42)
+    return sample.reset_index(drop=True), len(df)
 
 
 def convert(obj):
@@ -56,7 +81,16 @@ class Trainer:
         inspector.load()
         self.data_report['inspection'] = inspector.inspect()
 
-        preprocessor = Preprocessor(inspector.df, self.target_column, self.problem_type)
+        raw_df = inspector.df.copy()
+        training_df, subsampled_from = _subsample_for_training(raw_df, self.target_column)
+        if subsampled_from:
+            self.data_report['dataset_subsampled'] = {
+                'original_rows': subsampled_from,
+                'training_rows': len(training_df),
+                'note': 'Dataset larger than the free-tier training limit; inspecting all rows but training on a stratified sample.'
+            }
+
+        preprocessor = Preprocessor(training_df, self.target_column, self.problem_type)
         preprocessor.clean()
         if preprocessor.problem_type is None:
             preprocessor.detect_problem_type()
@@ -102,7 +136,6 @@ class Trainer:
             try:
                 self._report(f'Training {name}…', idx, total, name)
                 result = train_model(info, X_train, y_train, name)
-                self.trained_models[name] = result['model']
                 y_pred = result['model'].predict(X_test)
                 elapsed = round(time.time() - start, 3)
 
@@ -124,6 +157,10 @@ class Trainer:
                     'total_time': elapsed,
                     'status': 'completed'
                 })
+                self.trained_models[name] = result['model']
+                self._persist_model_artifact(name, result['model'])
+                # Keep peak memory low on constrained hosts: only retain the best so far.
+                self._prune_models()
                 self._report(f'{name} completed.', idx + 1, total, name, 'success')
             except Exception as e:
                 self.results.append({
@@ -141,8 +178,29 @@ class Trainer:
 
         return self.summarize()
 
+    def _persist_model_artifact(self, name, model):
+        if not self.artifact_dir or not self.preprocessor:
+            return
+        try:
+            os.makedirs(self.artifact_dir, exist_ok=True)
+            os.makedirs(os.path.join(self.artifact_dir, 'models'), exist_ok=True)
+            safe_name = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+            joblib.dump(self.preprocessor.export_artifact(model), os.path.join(self.artifact_dir, 'models', f'{safe_name}.joblib'))
+        except Exception:
+            pass
+
+    def _prune_models(self):
+        """Keep only the current best model in memory to cap RAM usage."""
+        if not self.results:
+            return
+        ranked = rank_models(list(self.results), self.problem_type)
+        best_name = ranked[0]['model_name'] if ranked else None
+        for name in list(self.trained_models.keys()):
+            if name != best_name:
+                del self.trained_models[name]
+
     def _save_best_artifact(self):
-        """Persist the winning estimator and its fitted transformation state."""
+        """Persist the winning estimator at a predictable top-level path."""
         completed = next((r for r in self.results if r['status'] == 'completed'), None)
         if not completed or not self.artifact_dir or not self.preprocessor:
             return
@@ -150,13 +208,10 @@ class Trainer:
         if model is None:
             return
         os.makedirs(self.artifact_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.artifact_dir, 'models'), exist_ok=True)
-        for name, trained_model in self.trained_models.items():
-            safe_name = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
-            joblib.dump(self.preprocessor.export_artifact(trained_model), os.path.join(self.artifact_dir, 'models', f'{safe_name}.joblib'))
-        # Keep the winner at a predictable top-level path for simple deployments.
         joblib.dump(self.preprocessor.export_artifact(model), os.path.join(self.artifact_dir, 'model.joblib'))
         self.artifact_path = self.artifact_dir
+        # Free the winner too once serialized; results carry everything the UI needs.
+        self.trained_models.clear()
 
     def summarize(self):
         best = self.results[0] if self.results else None

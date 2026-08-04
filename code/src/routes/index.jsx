@@ -255,8 +255,9 @@ function SmartMLApp() {
     const poll = async () => {
       try {
         const r = await fetch(`${API_BASE}/status/${activeJobId}`);
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || "Status polling failed");
+        if (!r.ok) throw new Error(`Status check failed (${r.status})`);
+        const data = await r.json().catch(() => null);
+        if (!data) throw new Error("Backend returned an unreadable response (it may be restarting)");
         setTrainingStatus(data.status || "running");
         setTrainingProgress(data.progress?.percent ?? 0);
         setTrainingLogs(data.logs || []);

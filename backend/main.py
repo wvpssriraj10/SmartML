@@ -482,6 +482,19 @@ def get_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Watchdog: a worker that dies mid-training (e.g. OOM on a constrained host)
+    # leaves the job stuck at "running" forever. If nothing has updated it in a
+    # while, mark it failed so clients stop polling a zombie.
+    if job['status'] in ('running', 'queued') and job.get('updated_at'):
+        try:
+            last = datetime.fromisoformat(job['updated_at'])
+            age_minutes = (datetime.now() - last).total_seconds() / 60
+            if age_minutes > 5:
+                update_job(job_id, status='failed', error='Worker stopped responding (likely out of memory on the host). Please retry training.')
+                job = get_job(job_id)
+        except (ValueError, TypeError):
+            pass
+
     response = {
         "job_id": job_id,
         "status": job['status'],
