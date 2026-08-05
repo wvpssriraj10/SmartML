@@ -18,6 +18,9 @@ jobs:
       - name: Install frontend deps
         working-directory: code
         run: npm ci
+      - name: Ensure Tailwind oxide Linux binding
+        working-directory: code
+        run: npm install @tailwindcss/oxide-linux-x64-gnu@4.3.3 --save=optional
       - name: Build frontend
         working-directory: code
         run: npm run build
