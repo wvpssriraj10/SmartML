@@ -77,25 +77,53 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
     setError(null);
     setSuccessFile(null);
     setUploading(true);
-    setProgress(10);
+    setProgress(5);
 
     // Animate progress bar while waiting for API
     const ticker = setInterval(() => {
-      setProgress(p => Math.min(85, p + 5 + Math.random() * 8));
-    }, 200);
+      setProgress(p => Math.min(90, p + 3 + Math.random() * 5));
+    }, 300);
 
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: fd });
+      // Step 1: Get presigned URL from R2
+      const presignRes = await fetch(`${API_BASE}/upload/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ filename: file.name, content_type: file.type || "text/csv" }),
+      });
       clearInterval(ticker);
+      setProgress(15);
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Upload failed");
+      if (!presignRes.ok) {
+        const err = await presignRes.json();
+        throw new Error(err.detail || "Failed to get upload URL");
       }
-      const data = await res.json();
+      const { url, key, bucket } = await presignRes.json();
+
+      // Step 2: Upload directly to R2 (browser → Cloudflare)
+      const uploadRes = await fetch(url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "text/csv" },
+      });
+      if (!uploadRes.ok) {
+        throw new Error("Upload to storage failed");
+      }
+      setProgress(50);
+
+      // Step 3: Tell backend to download from R2 and inspect
+      const completeRes = await fetch(`${API_BASE}/upload/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ key, filename: file.name, bucket }),
+      });
+      if (!completeRes.ok) {
+        const err = await completeRes.json();
+        throw new Error(err.detail || "Failed to complete upload");
+      }
       setProgress(100);
+
+      const data = await completeRes.json();
       setSuccessFile(file.name);
 
       // Refresh dataset library

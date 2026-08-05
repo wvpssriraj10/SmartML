@@ -5,12 +5,33 @@ import json
 import sys
 import zipfile
 import io
+import shutil
+import boto3
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+
+# R2 client (lazy init)
+_r2 = None
+def get_r2():
+    global _r2
+    if _r2 is None:
+        account_id = os.getenv("R2_ACCOUNT_ID")
+        access_key = os.getenv("R2_ACCESS_KEY")
+        secret_key = os.getenv("R2_SECRET_KEY")
+        if not (account_id and access_key and secret_key):
+            return None
+        _r2 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name="auto",
+        )
+    return _r2
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -58,6 +79,28 @@ app.add_middleware(
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "SmartML Dashboard", "version": "2.0.0"}
+
+
+# ─── R2 Direct Upload ───────────────────────────────────────────────────────────
+
+@app.post("/api/upload/presign")
+def presign_upload(filename: str = Form(...), content_type: str = Form(...)):
+    r2 = get_r2()
+    if not r2:
+        raise HTTPException(status_code=503, detail="R2 not configured")
+    bucket = os.getenv("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=503, detail="R2_BUCKET not set")
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ['.csv', '.xlsx', '.xls', '.json']:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}")
+    key = f"uploads/{uuid.uuid4()}{ext}"
+    url = r2.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": bucket, "Key": key, "ContentType": content_type},
+        ExpiresIn=3600,
+    )
+    return {"url": url, "key": key, "bucket": bucket}
 
 
 # ─── Upload ───────────────────────────────────────────────────────────────────
@@ -127,6 +170,79 @@ async def upload_file(file: UploadFile = File(...)):
         filename=file.filename,
         inspection=inspection,
         message=f"Dataset '{file.filename}' uploaded. Rows: {inspection['rows']}, Columns: {inspection['columns']}"
+    )
+
+
+@app.post("/api/upload/complete", response_model=UploadResponse)
+async def complete_r2_upload(
+    key: str = Form(...),
+    filename: str = Form(...),
+    bucket: str = Form(...),
+):
+    r2 = get_r2()
+    if not r2:
+        raise HTTPException(status_code=503, detail="R2 not configured")
+    if not bucket:
+        bucket = os.getenv("R2_BUCKET")
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ['.csv', '.xlsx', '.xls', '.json']:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}")
+
+    job_id = str(uuid.uuid4())
+    safe_name = f"{job_id}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    # Stream download from R2 to local file (no full memory load)
+    try:
+        r2.download_file(bucket, key, file_path)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to download from R2: {e}")
+
+    try:
+        inspector = DatasetInspector(file_path)
+        inspector.load()
+        inspection = inspector.inspect()
+        sample_size = min(1000, len(inspector.df))
+        sample_df = inspector.df.head(sample_size)
+        sample = sample_df.to_dict('records')
+        inspection['sample'] = convert(sample)
+        target_candidates = inspector.suggest_target()
+    except Exception as e:
+        os.remove(file_path)
+        raise HTTPException(status_code=422, detail=f"Failed to parse dataset: {str(e)}")
+
+    preferred_names = ('target', 'label', 'class', 'output', 'result', 'outcome', 'price', 'salary', 'churn')
+    suggested = next((item['column'] for name in preferred_names for item in target_candidates if name in item['column'].lower()), None)
+    if not suggested and target_candidates:
+        suggested = target_candidates[-1]['column']
+    if suggested:
+        unique_count = inspection.get('column_stats', {}).get(suggested, {}).get('unique_count', 0)
+        inspection['suggested_target'] = suggested
+        inspection['suggested_problem_type'] = 'classification' if suggested in inspection.get('categorical_columns', []) or unique_count <= 20 else 'regression'
+        inspection.setdefault('kpis', {})['suggested_target'] = suggested
+
+    create_job(job_id, file_path, filename)
+    update_job(job_id, inspection=json.dumps(convert(inspection), indent=2))
+
+    dataset_id = job_id
+    metrics = calculate_dataset_metrics(inspector.df)
+    create_dataset(
+        dataset_id=dataset_id,
+        name=filename.split('.')[0].replace('_', ' ').title(),
+        filename=filename,
+        file_path=file_path,
+        file_size=os.path.getsize(file_path),
+        file_type=ext.replace('.', ''),
+        row_count=inspection['rows'],
+        col_count=inspection['columns'],
+        inspection_data=metrics
+    )
+
+    return UploadResponse(
+        job_id=job_id,
+        filename=filename,
+        inspection=inspection,
+        message=f"Dataset '{filename}' uploaded. Rows: {inspection['rows']}, Columns: {inspection['columns']}"
     )
 
 
