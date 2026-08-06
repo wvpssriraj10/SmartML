@@ -85,7 +85,7 @@ export function ResultsStep({ results, problemType, columns, target, onNewSessio
           </div>
           <ul className="space-y-2.5">
             {insight.winReasons.map((r, i) => (
-              <li key={i} className="flex gap-2.5 rounded-xl border border-border/50 bg-card/40 p-3 text-xs leading-relaxed text-muted-foreground">
+              <li key={i} className={`flex gap-2.5 rounded-xl border border-border/50 bg-card/40 p-3 text-xs leading-relaxed text-muted-foreground interactive-card animate-fade-in-up stagger-${(i % 8) + 1}`}>
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber/20 text-[10px] font-bold text-amber">{i + 1}</span>
                 <span>{r}</span>
               </li>
@@ -107,8 +107,8 @@ export function ResultsStep({ results, problemType, columns, target, onNewSessio
             {insight.problemRationale}
           </p>
           <ul className="space-y-2">
-            {insight.metricExplainer.map((m) => (
-              <li key={m.key} className="text-[11px] leading-relaxed">
+            {insight.metricExplainer.map((m, i) => (
+              <li key={m.key} className={`text-[11px] leading-relaxed interactive-card animate-fade-in-up stagger-${(i % 8) + 1}`}>
                 <div className="flex items-baseline gap-2">
                   <span className="font-mono text-xs font-semibold text-foreground">{m.label}</span>
                   <span className="font-mono text-[10px] text-cyan">
@@ -136,11 +136,11 @@ export function ResultsStep({ results, problemType, columns, target, onNewSessio
             </span>
           </div>
           <div className="space-y-2">
-            {results.map((r) => {
+            {results.map((r, i) => {
               const v = r.metrics[metricKeys[0]] ?? 0;
               const pct = (v / bestValue) * 100;
               return (
-                <div key={r.name} className={`group relative overflow-hidden rounded-xl border p-3 transition ${
+                <div key={r.name} className={`group relative overflow-hidden rounded-xl border p-3 interactive-card animate-fade-in-up stagger-${(i % 8) + 1} transition ${
                   r.isChampion ? "border-amber/50 bg-amber/5" : "border-border/60 bg-card/40 hover:bg-accent/40"
                 }`}>
                   <div className="relative flex items-center gap-3">

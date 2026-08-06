@@ -165,8 +165,8 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
           { icon: FileSpreadsheet, label: "CSV", desc: "Comma-separated" },
           { icon: FileSpreadsheet, label: "Excel", desc: ".xlsx, .xls" },
           { icon: FileJson, label: "JSON", desc: "Array of records" },
-        ].map((f) => (
-          <div key={f.label} className="glass-panel flex items-center gap-3 rounded-xl p-4">
+        ].map((f, i) => (
+          <div key={f.label} className={`glass-panel flex items-center gap-3 rounded-xl p-4 interactive-card animate-fade-in-up stagger-${i + 1}`}>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <f.icon className="h-5 w-5" />
             </div>
@@ -196,13 +196,13 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
             <span className="text-xs text-muted-foreground">{recentJobs.length} recent</span>
           </div>
           <div className="space-y-2">
-            {recentJobs.map((job) => {
+            {recentJobs.map((job, i) => {
               const status = job.status || "uploaded";
               const statusLabel = status === "completed" ? "FINALIZED" : status.replace(/_/g, " ").toUpperCase();
               const date = job.updated_at || job.created_at;
               const canResume = status === "uploaded" || status === "completed";
               return (
-                <div key={job.id} className="glass-panel flex items-center gap-3 rounded-xl px-4 py-3">
+                <div key={job.id} className={`glass-panel flex items-center gap-3 rounded-xl px-4 py-3 interactive-card animate-fade-in-up stagger-${(i % 8) + 1}`}>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <FileSpreadsheet className="h-4 w-4" />
                   </div>

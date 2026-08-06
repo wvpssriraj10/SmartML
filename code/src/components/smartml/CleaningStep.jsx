@@ -302,7 +302,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
           </div>
 
           <div className="max-h-[460px] overflow-y-auto pr-1 space-y-1.5">
-            {dataset.columns?.map(col => {
+            {dataset.columns?.map((col, i) => {
               const meta = columnStatus[col] || {};
               const isSelected = selectedColumn === col;
               const hasIssues = meta.missing > 0 || meta.outliers > 0;
@@ -311,8 +311,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
                 <button
                   key={col}
                   onClick={() => setSelectedColumn(col)}
-                  className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition ${
-                    isSelected
+                  className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left interactive-card animate-fade-in-up stagger-${(i % 8) + 1} transition-all duration-200 ease-expo ${  isSelected
                       ? "border-primary bg-primary/10 shadow-sm"
                       : "border-border/50 bg-card/40 hover:bg-accent/40"
                   }`}
@@ -368,7 +367,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
           {/* Cleaning Actions */}
           <div className="space-y-4">
             {/* Missing Values Action */}
-            <div className="space-y-2">
+            <div className="space-y-2 interactive-card animate-fade-in-up stagger-1">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 1. Handle Missing Values
               </label>
@@ -413,7 +412,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
 
             {/* Outliers Action */}
             {selectedColMeta.type === "numeric" && (
-              <div className="space-y-2">
+              <div className="space-y-2 interactive-card animate-fade-in-up stagger-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   2. Handle Outliers (IQR 1.5x)
                 </label>

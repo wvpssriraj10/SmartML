@@ -49,8 +49,8 @@ export function InspectionStep({ inspection, onStartTraining }) {
     <div className="animate-fade-in-up space-y-6">
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {stats.map((s) => (
-          <div key={s.label} className="glass-panel glow-border relative overflow-hidden rounded-2xl p-4">
+        {stats.map((s, i) => (
+          <div key={s.label} className={`glass-panel glow-border relative overflow-hidden rounded-2xl p-4 interactive-card animate-fade-in-up stagger-${i + 1}`}>
             <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-${s.tone}/15 text-${s.tone}`}>
               <s.icon className="h-4.5 w-4.5" />
             </div>
@@ -88,8 +88,8 @@ export function InspectionStep({ inspection, onStartTraining }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {inspection.columns.map((c) => (
-                    <tr key={c.name} className="border-t border-border/40 transition hover:bg-accent/40">
+                  {inspection.columns.map((c, i) => (
+                    <tr key={c.name} className="border-t border-border/40 interactive-card hover:bg-accent/40 transition-all duration-200 ease-expo" style={{ animationDelay: `${(i % 8) * 20}ms` }}>
                       <td className="px-5 py-2.5 font-mono text-xs">{c.name}</td>
                       <td className="px-2 py-2.5">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${TYPE_STYLES[c.type]}`}>
@@ -128,7 +128,7 @@ export function InspectionStep({ inspection, onStartTraining }) {
                 </thead>
                 <tbody className="font-mono">
                   {inspection.preview.slice(0, 10).map((row, i) => (
-                    <tr key={i} className="border-t border-border/40 hover:bg-accent/30">
+                    <tr key={i} className="border-t border-border/40 interactive-card hover:bg-accent/30 transition-all duration-200 ease-expo" style={{ animationDelay: `${i * 30}ms` }}>
                       {previewCols.map((c) => (
                         <td key={c} className="whitespace-nowrap px-3 py-1.5 text-muted-foreground">
                           {String(row[c])}

@@ -73,7 +73,7 @@ export function TrainingStep({ target, problemType, status, progress, elapsed, l
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={circumference - dash}
-                style={{ transition: "stroke-dashoffset 0.4s ease" }}
+                style={{ transition: `stroke-dashoffset ${400}ms var(--ease-out-expo)` }}
               />
             </svg>
             <div className="relative text-center">
@@ -149,22 +149,21 @@ export function TrainingStep({ target, problemType, status, progress, elapsed, l
             <div className="text-xs text-muted-foreground">Live status across all algorithms</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {(models || []).map((m) => (
-            <ModelCard key={m.name} model={m} />
-          ))}
-        </div>
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {(models || []).map((m, i) => (
+              <ModelCard key={m.name} model={m} index={i} />
+            ))}
+          </div>
       </div>
     </div>
   );
 }
 
-function ModelCard({ model }) {
+function ModelCard({ model, index = 0 }) {
   const isTraining = model.status === "training";
   const isDone = model.status === "completed";
   return (
-    <div className={`relative overflow-hidden rounded-xl border p-3.5 transition ${
-      isTraining ? "border-primary/50 bg-primary/5 animate-shimmer" :
+    <div className={`relative overflow-hidden rounded-xl border p-3.5 interactive-card animate-fade-in-up stagger-${(index % 8) + 1} ${  isTraining ? "border-primary/50 bg-primary/5 animate-shimmer" :
       isDone ? "border-emerald/30 bg-emerald/5" :
       "border-border/60 bg-card/50"
     }`}>
