@@ -74,6 +74,12 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
       setError(`Unsupported file type "${ext}". Please upload CSV, Excel, or JSON.`);
       return;
     }
+    // Hard limit: 200 MB (free-tier RAM constraint)
+    const MAX_SIZE = 200 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setError(`File too large (${(file.size / 1e6).toFixed(1)} MB). Max 200 MB on free tier.`);
+      return;
+    }
     setError(null);
     setSuccessFile(null);
     setUploading(true);

@@ -36,6 +36,12 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
   }, []);
 
   const handleFile = (f) => {
+    // Hard limit: 200 MB (free-tier RAM constraint)
+    const MAX_SIZE = 200 * 1024 * 1024;
+    if (f.size > MAX_SIZE) {
+      alert(`File too large (${(f.size / 1e6).toFixed(1)} MB). Max 200 MB on free tier.`);
+      return;
+    }
     setFile(f);
     setStatus("uploading");
     setProgress(0);
