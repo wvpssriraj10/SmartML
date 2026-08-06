@@ -22,7 +22,7 @@ const MODEL_NAMES = [
 ];
 
 const STEPS = [
-  { key: "upload", label: "Upload" },
+  { key: "upload", label: "Dataset" },
   { key: "analyzing", label: "Analyze" },
   { key: "inspection", label: "Configure" },
   { key: "training", label: "Train" },

@@ -88,7 +88,7 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
       <div className="mb-10 text-center">
         <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-xs font-medium shadow-[var(--glow-primary)]">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald animate-pulse-glow" />
-          <span className="uppercase tracking-widest text-[10px] text-foreground/80">Step 1 · Upload</span>
+          <span className="uppercase tracking-widest text-[10px] text-foreground/80">Step 1 · Dataset</span>
           <span className="text-muted-foreground">Drop your dataset to begin</span>
         </div>
         <h1 className="text-5xl font-bold tracking-tight md:text-6xl">
