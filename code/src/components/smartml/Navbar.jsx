@@ -1,4 +1,4 @@
-import { Sparkles, Plus, Wifi, FolderUp, Table, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Home, Lightbulb } from "lucide-react";
+import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
@@ -6,10 +6,6 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
   const currentPath = routerState.location.pathname;
 
   const datasetParam = activeDatasetId ? `?datasetId=${activeDatasetId}` : '';
-
-  const alwaysItems = [
-    { label: "Home", href: "/", icon: Home },
-  ];
 
   const datasetItems = activeDatasetId ? [
     { label: "Cleaning", href: `/cleaning${datasetParam}`, icon: SlidersHorizontal },
@@ -20,26 +16,25 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
     { label: "Predictions", href: `/predictions${datasetParam}`, icon: TrendingUp },
   ] : [];
 
-  const navItems = [...alwaysItems, ...datasetItems];
+  const navItems = [...datasetItems];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 backdrop-blur-xl bg-background/80 animate-fade-in-up">
-      <div className="mx-auto flex h-16 items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-all duration-200 ease-expo">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[image:var(--gradient-primary)] shadow-[var(--glow-primary)] animate-float">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div className="flex flex-col leading-tight">
-              <span className="font-display text-lg font-bold tracking-tight">
-                Smart<span className="text-gradient">ML</span>
-              </span>
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                AutoML & Analytics
-              </span>
-            </div>
-          </Link>
-        </div>
+      <div className="relative mx-auto flex h-16 items-center justify-between px-6">
+        {/* Centered logo */}
+        <Link to="/" className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3 hover:opacity-90 transition-all duration-200 ease-expo">
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[image:var(--gradient-primary)] shadow-[var(--glow-primary)] animate-float">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-display text-lg font-bold tracking-tight">
+              Smart<span className="text-gradient">ML</span>
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              AutoML & Analytics
+            </span>
+          </div>
+        </Link>
 
         {/* Central Multi-Route Navigation Bar */}
         <nav className="hidden lg:flex items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 backdrop-blur-md animate-fade-in-up stagger-1">
