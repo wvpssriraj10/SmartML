@@ -255,9 +255,17 @@ function SmartMLApp() {
     const poll = async () => {
       try {
         const r = await fetch(`${API_BASE}/status/${activeJobId}`);
-        if (!r.ok) throw new Error(`Status check failed (${r.status})`);
-        const data = await r.json().catch(() => null);
-        if (!data) throw new Error("Backend returned an unreadable response (it may be restarting)");
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          throw new Error(`Status check failed (${r.status}): ${text.slice(0, 200)}`);
+        }
+        let data;
+        try {
+          data = await r.json();
+        } catch {
+          throw new Error("Backend returned invalid JSON (may be restarting)");
+        }
+        if (!data) throw new Error("Backend returned empty response");
         setTrainingStatus(data.status || "running");
         setTrainingProgress(data.progress?.percent ?? 0);
         setTrainingLogs(data.logs || []);
@@ -320,8 +328,11 @@ function SmartMLApp() {
   const loadResults = async (activeJobId) => {
     try {
       const r = await fetch(`${API_BASE}/results/${activeJobId}`);
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(text || `Results fetch failed (${r.status})`);
+      }
       const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || "Results not ready");
       const mapped = mapResults(data);
       setBackendResults(data);
       setResults(mapped.ranked);
@@ -335,10 +346,11 @@ function SmartMLApp() {
   const handleResumeJob = async (savedJob) => {
     try {
       const r = await fetch(`${API_BASE}/jobs/${savedJob.id}`);
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(text || `Load job failed (${r.status})`);
+      }
       const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || "Could not load dataset");
-
-      setJobId(data.job_id);
       setFile({ name: data.filename });
       const mappedInspection = mapInspection(data.inspection, data.filename);
       setInspection(mappedInspection);
