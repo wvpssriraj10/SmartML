@@ -160,7 +160,7 @@ export function FeatureAnalysisStep({ datasetId }) {
       {/* Header */}
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Feature Analysis</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="text-sm text-muted-foreground mt-1">
           Correlation heatmap, redundancy detection, and per-feature readiness scores for {allCols.length} columns.
         </p>
       </div>

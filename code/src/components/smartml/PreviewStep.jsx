@@ -57,14 +57,14 @@ export function PreviewStep({ datasetId, onNavigateToCleaning }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">
             Dataset Row Browser
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             Paginated row-level inspection for dataset: <strong className="font-mono text-foreground">{data?.name || datasetId}</strong>
           </p>
         </div>

@@ -262,11 +262,11 @@ export function VisualizationStep({ datasetId }) {
     );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Bivariate Visualization Workbench</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="text-sm text-muted-foreground mt-1">
           Explore relationships across {meta.columns.length} columns · {preview.length?.toLocaleString()} data points loaded
         </p>
       </div>

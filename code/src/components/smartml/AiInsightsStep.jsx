@@ -75,7 +75,7 @@ export function AiInsightsStep({ datasetId }) {
               AUTO-GEN
             </span>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             Automated narrative storytelling, business risk assessment, anomaly detection, and PDF reporting.
           </p>
         </div>

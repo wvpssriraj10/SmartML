@@ -47,7 +47,7 @@ export function PredictionsStep({ datasetId, onNavigateToHome }) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">AutoML Predictions Engine</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             Train up to 10 models simultaneously with automated hyperparameter tuning. The best model is surfaced automatically.
           </p>
         </div>

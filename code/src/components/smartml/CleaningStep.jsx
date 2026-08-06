@@ -156,7 +156,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
   const selectedColMeta = columnStatus[selectedColumn] || {};
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-emerald/90 px-4 py-3 text-sm text-white shadow-xl backdrop-blur-md animate-in fade-in">
@@ -166,7 +166,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
       )}
 
       {/* Header & Pipeline History Breadcrumb */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
                 {dataset.status === 'finalized' ? 'FINALIZED' : 'IN PROGRESS'}
               </span>
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Refine, impute, cap, and encode columns before training models.
             </p>
           </div>
