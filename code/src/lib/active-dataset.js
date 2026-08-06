@@ -16,3 +16,11 @@ export function setActiveDataset(id) {
     /* storage unavailable */
   }
 }
+
+export function clearActiveDataset() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}

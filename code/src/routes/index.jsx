@@ -7,7 +7,7 @@ import { InspectionStep } from "@/components/smartml/InspectionStep";
 import { TrainingStep } from "@/components/smartml/TrainingStep";
 import { ResultsStep } from "@/components/smartml/ResultsStep";
 import { Check } from "lucide-react";
-import { setActiveDataset } from "@/lib/active-dataset";
+import { setActiveDataset, clearActiveDataset } from "@/lib/active-dataset";
 
 export const Route = createFileRoute("/")({
   component: SmartMLApp,
@@ -218,6 +218,7 @@ function SmartMLApp() {
   const handleNewSession = () => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (pollRef.current) window.clearInterval(pollRef.current);
+    clearActiveDataset();
     setStep("upload");
     setConnected(connected);
     setFile(null);
