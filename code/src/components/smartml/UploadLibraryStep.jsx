@@ -91,7 +91,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
     }, 300);
 
     try {
-      // Step 1: Get presigned URL from R2
+      // Step 1: Try presigned upload first (bypasses Render's ~100 MB body limit)
       const presignRes = await fetch(`${API_BASE}/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -100,36 +100,49 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
       clearInterval(ticker);
       setProgress(15);
 
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        throw new Error(err.detail || "Failed to get upload URL");
-      }
-      const { url, key, bucket } = await presignRes.json();
+      let data;
+      if (presignRes.ok) {
+        const { url, key, bucket } = await presignRes.json();
 
-      // Step 2: Upload directly to R2 (browser → Cloudflare)
-      const uploadRes = await fetch(url, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "text/csv" },
-      });
-      if (!uploadRes.ok) {
-        throw new Error("Upload to storage failed");
-      }
-      setProgress(50);
+        // Step 2: Upload directly to storage (browser → Supabase)
+        const uploadRes = await fetch(url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type || "text/csv" },
+        });
+        if (!uploadRes.ok) {
+          throw new Error("Upload to storage failed");
+        }
+        setProgress(50);
 
-      // Step 3: Tell backend to download from R2 and inspect
-      const completeRes = await fetch(`${API_BASE}/upload/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ key, filename: file.name, bucket }),
-      });
-      if (!completeRes.ok) {
-        const err = await completeRes.json();
-        throw new Error(err.detail || "Failed to complete upload");
+        // Step 3: Tell backend to download from storage and inspect
+        const completeRes = await fetch(`${API_BASE}/upload/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ key, filename: file.name, bucket }),
+        });
+        if (!completeRes.ok) {
+          const err = await completeRes.json();
+          throw new Error(err.detail || "Failed to complete upload");
+        }
+        setProgress(100);
+        data = await completeRes.json();
+      } else {
+        // Fallback: storage not configured (e.g. no credentials on Render) → use classic upload
+        const form = new FormData();
+        form.append("file", file);
+        const directRes = await fetch(`${API_BASE}/upload`, {
+          method: "POST",
+          body: form,
+        });
+        if (!directRes.ok) {
+          const err = await directRes.json().catch(() => ({}));
+          throw new Error(err.detail || `Upload failed (${directRes.status})`);
+        }
+        setProgress(100);
+        data = await directRes.json();
       }
-      setProgress(100);
 
-      const data = await completeRes.json();
       setSuccessFile(file.name);
 
       // Refresh dataset library
