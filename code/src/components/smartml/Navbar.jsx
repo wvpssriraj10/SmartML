@@ -1,4 +1,4 @@
-import { Sparkles, Plus, Wifi, FolderUp, Table, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Home, Database } from "lucide-react";
+import { Sparkles, Plus, Wifi, FolderUp, Table, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Home, Lightbulb } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
@@ -9,14 +9,14 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
 
   const alwaysItems = [
     { label: "Home", href: "/", icon: Home },
-    { label: "Uploads", href: "/uploads", icon: Database },
   ];
 
   const datasetItems = activeDatasetId ? [
     { label: "Cleaning", href: `/cleaning${datasetParam}`, icon: SlidersHorizontal },
     { label: "Visualization", href: `/visualization${datasetParam}`, icon: BarChart3 },
     { label: "Feature Analysis", href: `/feature-analysis${datasetParam}`, icon: Sparkle },
-    { label: "AI Insights", href: `/ai-insights${datasetParam}`, icon: Brain },
+    { label: "Training", href: `/training${datasetParam}`, icon: Brain },
+    { label: "AI Insights", href: `/ai-insights${datasetParam}`, icon: Lightbulb },
     { label: "Predictions", href: `/predictions${datasetParam}`, icon: TrendingUp },
   ] : [];
 
