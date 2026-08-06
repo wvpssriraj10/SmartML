@@ -7,6 +7,7 @@ import { InspectionStep } from "@/components/smartml/InspectionStep";
 import { TrainingStep } from "@/components/smartml/TrainingStep";
 import { ResultsStep } from "@/components/smartml/ResultsStep";
 import { Check } from "lucide-react";
+import { setActiveDataset } from "@/lib/active-dataset";
 
 export const Route = createFileRoute("/")({
   component: SmartMLApp,
@@ -169,6 +170,7 @@ function SmartMLApp() {
       if (!r.ok) throw new Error(data.detail || "Upload failed");
       const mapped = mapInspection(data.inspection, f.name);
       setJobId(data.job_id);
+      setActiveDataset(data.job_id);
       setInspection(mapped);
       setAnalysisReady(true);
       pushAssistant(
@@ -346,6 +348,7 @@ function SmartMLApp() {
       }
       const data = await r.json();
       setFile({ name: data.filename });
+      setActiveDataset(data.job_id);
       const mappedInspection = mapInspection(data.inspection, data.filename);
       setInspection(mappedInspection);
       setTrainCfg(data.target_column ? {

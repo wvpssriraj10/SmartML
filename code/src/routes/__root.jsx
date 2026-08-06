@@ -3,6 +3,7 @@ import { Outlet, createRootRoute, useRouter, useSearch } from "@tanstack/react-r
 import { useEffect } from "react";
 
 import { Navbar } from "@/components/smartml/Navbar";
+import { getActiveDataset } from "@/lib/active-dataset";
 import appCss from "../styles.css?url";
 
 const queryClient = new QueryClient();
@@ -82,7 +83,7 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const search = useSearch({ strict: false });
-  const datasetId = search.datasetId;
+  const datasetId = search.datasetId || getActiveDataset();
 
   return (
     <QueryClientProvider client={queryClient}>

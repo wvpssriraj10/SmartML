@@ -8,7 +8,7 @@ import { API_BASE } from "@/api";
 
 const ACCEPTED = [".csv", ".xlsx", ".xls", ".json"];
 
-export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigateToCleaning, onNavigateToVisualization }) {
+export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigateToCleaning, onNavigateToVisualization, onActivateDataset, libraryOnly = false }) {
   const [datasets, setDatasets]   = useState([]);
   const [libLoading, setLibLoading] = useState(true);
   const [dragOver, setDragOver]   = useState(false);
@@ -197,6 +197,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
     <div className="space-y-8 animate-fade-in-up">
 
       {/* ── Drop Zone ─────────────────────────────────────────────────────── */}
+      {!libraryOnly && (
       <div className="space-y-3">
         <div className="text-center space-y-1">
           <h1 className="font-display text-3xl font-bold tracking-tight">
@@ -289,6 +290,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
           </div>
         )}
       </div>
+      )}
 
       {/* ── Dataset Library ───────────────────────────────────────────────── */}
       <div className="space-y-4">
@@ -337,13 +339,13 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button onClick={() => onActivateDataset?.(ds.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[image:var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition">
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Open Dataset
+                      </button>
                       <button onClick={() => onSelectDataset?.(ds.id, "preview")}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium hover:bg-accent transition">
                         <Eye className="h-3.5 w-3.5" /> Preview
-                      </button>
-                      <button onClick={() => onNavigateToCleaning?.(ds.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg btn-gradient px-3 py-1.5 text-xs font-semibold shadow-sm transition">
-                        <SlidersHorizontal className="h-3.5 w-3.5" /> Continue Cleaning
                       </button>
                       <button onClick={() => handleDelete(ds.id)}
                         className="p-1.5 rounded-lg border border-border/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition">
@@ -379,9 +381,13 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => onNavigateToVisualization?.(ds.id)}
+                      <button onClick={() => onActivateDataset?.(ds.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[image:var(--gradient-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition">
+                        <BarChart3 className="h-3.5 w-3.5" /> Open Dataset
+                      </button>
+                      <button onClick={() => onNavigateToCleaning?.(ds.id)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/60 px-3 py-1.5 text-xs font-medium hover:bg-accent transition">
-                        <BarChart3 className="h-3.5 w-3.5 text-primary" /> View Charts
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Cleaning
                       </button>
                       <button onClick={() => handleDelete(ds.id)}
                         className="p-1.5 rounded-lg border border-border/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition">

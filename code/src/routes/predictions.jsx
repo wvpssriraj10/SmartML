@@ -1,5 +1,6 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { PredictionsStep } from "@/components/smartml/PredictionsStep";
+import { getActiveDataset } from "@/lib/active-dataset";
 
 export const Route = createFileRoute("/predictions")({
   component: PredictionsRouteComponent,
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/predictions")({
 function PredictionsRouteComponent() {
   const search = useSearch({ strict: false });
   const navigate = useNavigate();
-  const datasetId = search.datasetId;
+  const datasetId = search.datasetId || getActiveDataset();
 
   return (
     <PredictionsStep
