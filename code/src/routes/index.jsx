@@ -434,32 +434,34 @@ function SmartMLApp() {
     <>
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-12">
         <main className="min-w-0 lg:col-span-12">
-          {/* Stepper */}
-          <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-1">
-            {STEPS.map((s, i) => {
-              const done = i < currentIdx;
-              const active = i === currentIdx;
-              return (
-                <div key={s.key} className="flex items-center gap-2">
-                  <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition ${
-                    active ? "border-primary/60 bg-primary/15 text-foreground" :
-                    done ? "border-emerald/40 bg-emerald/10 text-emerald" :
-                    "border-border/60 text-muted-foreground"
-                  }`}>
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                      active ? "bg-[image:var(--gradient-primary)] text-white" :
-                      done ? "bg-emerald text-background" :
-                      "bg-muted text-muted-foreground"
+          {/* Stepper — hidden until past upload step */}
+          {step !== "upload" && (
+            <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-1">
+              {STEPS.map((s, i) => {
+                const done = i < currentIdx;
+                const active = i === currentIdx;
+                return (
+                  <div key={s.key} className="flex items-center gap-2">
+                    <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition ${
+                      active ? "border-primary/60 bg-primary/15 text-foreground" :
+                      done ? "border-emerald/40 bg-emerald/10 text-emerald" :
+                      "border-border/60 text-muted-foreground"
                     }`}>
-                      {done ? <Check className="h-3 w-3" /> : i + 1}
-                    </span>
-                    <span className="font-medium">{s.label}</span>
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                        active ? "bg-[image:var(--gradient-primary)] text-white" :
+                        done ? "bg-emerald text-background" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {done ? <Check className="h-3 w-3" /> : i + 1}
+                      </span>
+                      <span className="font-medium">{s.label}</span>
+                    </div>
+                    {i < STEPS.length - 1 && <span className={`h-px w-6 ${i < currentIdx ? "bg-emerald/50" : "bg-border"}`} />}
                   </div>
-                  {i < STEPS.length - 1 && <span className={`h-px w-6 ${i < currentIdx ? "bg-emerald/50" : "bg-border"}`} />}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {step === "upload" && <UploadStep onUploaded={handleUploaded} onResumeJob={handleResumeJob} recentJobs={recentJobs} />}
           {step === "analyzing" && <AnalyzingStep fileName={file?.name ?? "dataset"} ready={analysisReady} onDone={handleAnalyzed} />}
