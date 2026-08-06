@@ -127,6 +127,9 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
         <div className="mt-1 text-sm text-muted-foreground">
           {file ? file.name : "CSV · Excel (.xlsx, .xls) · JSON — up to 200 MB"}
         </div>
+        <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 max-w-md mx-auto mt-2">
+          ⚠ Currently limited to ~200 MB (free-tier RAM). Larger dataset support coming soon.
+        </p>
 
         {status === "uploading" && (
           <div className="mt-6 w-full max-w-sm">

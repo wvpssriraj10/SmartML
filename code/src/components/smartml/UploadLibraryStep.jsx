@@ -186,6 +186,9 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
           <p className="text-sm text-muted-foreground">
             CSV · Excel · JSON — up to 200 MB
           </p>
+          <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 max-w-md mx-auto">
+            ⚠ Currently limited to ~200 MB (free-tier RAM). Larger dataset support coming soon.
+          </p>
         </div>
 
         <div
