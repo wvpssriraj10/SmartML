@@ -124,6 +124,10 @@ def get_smart_models(data_profile):
     else:
         priority = list(available.keys())
 
+    # Limit to top 4 models for free-tier (512 MB RAM)
+    MAX_MODELS = 4
+    priority = priority[:MAX_MODELS]
+
     return {name: available[name] for name in priority if name in available}
 
 

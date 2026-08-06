@@ -124,8 +124,11 @@ class Trainer:
             models_dict = {name: available[name] for name in self.selected_models if name in available}
             self.data_report['model_selection_strategy'] = 'user_selected'
         else:
-            models_dict = MODEL_REGISTRY.get(self.problem_type, {})
-            self.data_report['model_selection_strategy'] = 'all_models'
+            # Limit "all models" mode to top 4 to fit 512 MB RAM
+            available = MODEL_REGISTRY.get(self.problem_type, {})
+            limited_keys = list(available.keys())[:4]
+            models_dict = {name: available[name] for name in limited_keys}
+            self.data_report['model_selection_strategy'] = 'all_models_limited'
 
         self.data_report['models_trained'] = list(models_dict.keys())
         total = len(models_dict)
