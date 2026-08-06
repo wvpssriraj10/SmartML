@@ -14,24 +14,25 @@ from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-# R2 client (lazy init)
-_r2 = None
-def get_r2():
-    global _r2
-    if _r2 is None:
-        account_id = os.getenv("R2_ACCOUNT_ID")
-        access_key = os.getenv("R2_ACCESS_KEY")
-        secret_key = os.getenv("R2_SECRET_KEY")
-        if not (account_id and access_key and secret_key):
+# Supabase Storage (S3-compatible) client
+_supabase = None
+def get_supabase():
+    global _supabase
+    if _supabase is None:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        if not (url and key):
             return None
-        _r2 = boto3.client(
+        # Supabase S3 endpoint: https://<project-ref>.supabase.co/storage/v1/s3
+        endpoint = url.rstrip("/") + "/storage/v1/s3"
+        _supabase = boto3.client(
             "s3",
-            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
+            endpoint_url=endpoint,
+            aws_access_key_id=key,
+            aws_secret_access_key=key,  # Supabase uses same key for both
             region_name="auto",
         )
-    return _r2
+    return _supabase
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -81,21 +82,19 @@ def health():
     return {"status": "ok", "service": "SmartML Dashboard", "version": "2.0.0"}
 
 
-# ─── R2 Direct Upload ───────────────────────────────────────────────────────────
+# ─── Supabase Direct Upload ─────────────────────────────────────────────────────
 
 @app.post("/api/upload/presign")
 def presign_upload(filename: str = Form(...), content_type: str = Form(...)):
-    r2 = get_r2()
-    if not r2:
-        raise HTTPException(status_code=503, detail="R2 not configured")
-    bucket = os.getenv("R2_BUCKET")
-    if not bucket:
-        raise HTTPException(status_code=503, detail="R2_BUCKET not set")
+    s3 = get_supabase()
+    if not s3:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    bucket = os.getenv("SUPABASE_BUCKET", "uploads")
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ['.csv', '.xlsx', '.xls', '.json']:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}")
     key = f"uploads/{uuid.uuid4()}{ext}"
-    url = r2.generate_presigned_url(
+    url = s3.generate_presigned_url(
         "put_object",
         Params={"Bucket": bucket, "Key": key, "ContentType": content_type},
         ExpiresIn=3600,
@@ -174,16 +173,16 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload/complete", response_model=UploadResponse)
-async def complete_r2_upload(
+async def complete_supabase_upload(
     key: str = Form(...),
     filename: str = Form(...),
     bucket: str = Form(...),
 ):
-    r2 = get_r2()
-    if not r2:
-        raise HTTPException(status_code=503, detail="R2 not configured")
+    s3 = get_supabase()
+    if not s3:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
     if not bucket:
-        bucket = os.getenv("R2_BUCKET")
+        bucket = os.getenv("SUPABASE_BUCKET", "uploads")
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ['.csv', '.xlsx', '.xls', '.json']:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}")
@@ -192,11 +191,11 @@ async def complete_r2_upload(
     safe_name = f"{job_id}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
 
-    # Stream download from R2 to local file (no full memory load)
+    # Stream download from Supabase to local file (no full memory load)
     try:
-        r2.download_file(bucket, key, file_path)
+        s3.download_file(bucket, key, file_path)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Failed to download from R2: {e}")
+        raise HTTPException(status_code=422, detail=f"Failed to download from Supabase: {e}")
 
     try:
         inspector = DatasetInspector(file_path)
