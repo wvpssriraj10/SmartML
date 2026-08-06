@@ -372,6 +372,12 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 1. Handle Missing Values
               </label>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <strong className="text-foreground/80">What it is:</strong> Cells where the data is blank or absent. Most models can't train on blank cells — they get ignored or cause errors.
+              </p>
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                <strong className="text-primary">Why we recommend it:</strong> filling in missing values lets the model use every row. The averages below are good default guesses when a value is simply missing at random.
+              </p>
               <div className="flex items-center gap-2">
                 <select
                   value={missingStrategy}
@@ -411,6 +417,12 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   2. Handle Outliers (IQR 1.5x)
                 </label>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong className="text-foreground/80">What it is:</strong> Outliers are extreme values far outside the typical range of this column (e.g. one salary of ₹99,99,999 among salaries around ₹50,000). They're found using the IQR rule, which flags anything beyond 1.5x the distance between the 25th and 75th percentile.
+                </p>
+                <p className="text-xs text-foreground/70 leading-relaxed">
+                  <strong className="text-primary">Why we recommend capping:</strong> extreme values can pull averages and model predictions far off. Capping clips outliers down to the nearest sensible boundary instead of deleting rows — so you keep your data while limiting the damage. Dropping rows only makes sense when outliers look like bad data, not real extremes.
+                </p>
                 <div className="flex items-center gap-2">
                   <select
                     value={outlierStrategy}
@@ -438,6 +450,12 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   2. Encoding Strategy
                 </label>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong className="text-foreground/80">What it is:</strong> Models understand numbers, not words. Encoding converts text categories (like "Red", "Green", "Blue") into numbers so they can be used for training.
+                </p>
+                <p className="text-xs text-foreground/70 leading-relaxed">
+                  <strong className="text-primary">One-Hot</strong> creates a separate column per category — best when categories have no order (colors, cities). <strong className="text-primary">Label encoding</strong> assigns numbers 1, 2, 3… — only use it when categories have a natural order (Low, Medium, High).
+                </p>
                 <div className="flex items-center gap-2">
                   <select
                     value={encodeStrategy}
@@ -464,6 +482,12 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 3. Replace Specific Value
               </label>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <strong className="text-foreground/80">What it is:</strong> Sometimes a value is off for a known reason — a typo ("N/A" vs "NA"), a temporary code (customer "0", date "9999"), or a placeholder like "Unknown". This swaps every matching cell to a cleaner value.
+              </p>
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                <strong className="text-primary">Use it when</strong> you know exactly what's wrong and what to fix it to — it's the most surgical fix and won't touch anything else.
+              </p>
               <div className="flex items-center gap-2">
                 <input
                   type="text"

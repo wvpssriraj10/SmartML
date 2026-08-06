@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Clock, Terminal, AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { Clock, Terminal, AlertCircle, CheckCircle2, Loader2, XCircle, Info } from "lucide-react";
+
+const MODEL_NAMES = [
+  "Logistic Regression",
+  "Decision Tree",
+  "Random Forest",
+  "XGBoost",
+];
 
 function statusIcon(s) {
   switch (s) {
@@ -76,7 +83,7 @@ export function TrainingStep({ target, problemType, status, progress, elapsed, l
           </div>
           <div className="flex-1">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Training in progress</div>
-            <h2 className="mt-1 text-2xl font-bold">10 models · racing to the top</h2>
+            <h2 className="mt-1 text-2xl font-bold">{MODEL_NAMES.length} models · racing to the top (free-tier limit)</h2>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />

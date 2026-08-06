@@ -15,15 +15,9 @@ export const Route = createFileRoute("/")({
 import { API_BASE } from "@/api";
 const MODEL_NAMES = [
   "Logistic Regression",
-  "Ridge Regression",
   "Decision Tree",
   "Random Forest",
-  "Gradient Boosting",
   "XGBoost",
-  "LightGBM",
-  "SVM",
-  "KNN",
-  "Neural Net",
 ];
 
 const STEPS = [
@@ -197,7 +191,7 @@ function SmartMLApp() {
     setTrainingProgress(0);
     setTrainingLogs([]);
     setModelStates(MODEL_NAMES.map((name) => ({ name, status: "queued", progress: 0 })));
-    pushAssistant(`Training 10 models to predict "${cfg.target}" — I'll narrate progress and highlight the champion when it emerges.`);
+    pushAssistant(`Training ${MODEL_NAMES.length} models to predict "${cfg.target}" (free-tier limit) — I'll narrate progress and highlight the champion when it emerges.`);
 
     try {
       const r = await fetch(`${API_BASE}/train`, {
