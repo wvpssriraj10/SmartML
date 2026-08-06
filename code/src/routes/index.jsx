@@ -21,6 +21,12 @@ const MODEL_NAMES = [
   "XGBoost",
 ];
 
+const KNOWN_MODEL = new Set([
+  "Logistic Regression", "Ridge Classifier", "Decision Tree", "Random Forest",
+  "Gradient Boosting", "XGBoost", "LightGBM", "SVM", "KNN", "Neural Net",
+  "Naive Bayes", "Ridge Regression", "Lasso Regression",
+]);
+
 const STEPS = [
   { key: "upload", label: "Dataset" },
   { key: "analyzing", label: "Analyze" },
@@ -267,28 +273,45 @@ function SmartMLApp() {
         setTrainingProgress(data.progress?.percent ?? 0);
         setTrainingLogs(data.logs || []);
 
-        const nextStates = MODEL_NAMES.map((name) => ({ name, status: "queued", progress: 0 }));
+        const nextStates = (() => {
+          const roster = [...MODEL_NAMES];
+          const add = (name) => {
+            const key = name.trim().toLowerCase();
+            if (!name || !KNOWN_MODEL.has(name) || roster.some((m) => m.toLowerCase() === key)) return;
+            roster.push(name);
+          };
+          (data.logs || []).forEach((entry) => {
+            const raw = entry?.message || "";
+            const m = raw.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
+            if (m && m[1]) add(m[1].trim());
+          });
+          if (data.progress?.current_model) add(data.progress.current_model);
+          return roster.map((name) => ({ name, status: "queued", progress: 0 }));
+        })();
+
         (data.logs || []).forEach((entry) => {
-          const model = MODEL_NAMES.find((n) => entry.message?.startsWith(n));
+          const raw = entry?.message || "";
+          const m = raw.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
+          const model = m && m[1] && KNOWN_MODEL.has(m[1].trim()) ? m[1].trim() : null;
           if (!model) return;
-          const idx = nextStates.findIndex((m) => m.name === model);
+          const idx = nextStates.findIndex((s) => s.name.toLowerCase() === model.toLowerCase());
           if (idx === -1) return;
-          if (/completed\./i.test(entry.message)) {
+          if (/completed\./i.test(raw)) {
             nextStates[idx] = { ...nextStates[idx], status: "completed", progress: 100 };
-          } else if (/failed:/i.test(entry.message)) {
+          } else if (/failed:/i.test(raw)) {
             nextStates[idx] = { ...nextStates[idx], status: "failed", progress: 100 };
-          } else if (/Training/i.test(entry.message)) {
+          } else if (/Training/i.test(raw)) {
             nextStates[idx] = { ...nextStates[idx], status: "training", progress: Math.max(nextStates[idx].progress, 30) };
           }
         });
         if (data.progress?.current_model) {
-          const idx = nextStates.findIndex((m) => m.name === data.progress.current_model);
+          const idx = nextStates.findIndex((m) => m.name.toLowerCase() === data.progress.current_model.toLowerCase());
           if (idx >= 0 && nextStates[idx].status === "queued") {
             nextStates[idx] = { ...nextStates[idx], status: "training", progress: 30 };
           }
         }
         const completedCount = nextStates.filter((m) => m.status === "completed" || m.status === "failed").length;
-        const evenlyDistributedProgress = completedCount > 0 ? Math.round((completedCount / MODEL_NAMES.length) * 100) : trainingProgress;
+        const evenlyDistributedProgress = completedCount > 0 ? Math.round((completedCount / nextStates.length) * 100) : trainingProgress;
         setModelStates(nextStates.map((m) => {
           if (m.status === "completed" || m.status === "failed") return m;
           if (m.status === "training") return { ...m, progress: Math.max(m.progress, evenlyDistributedProgress) };
