@@ -7,15 +7,20 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
 
   const datasetParam = activeDatasetId ? `?datasetId=${activeDatasetId}` : '';
 
-  const navItems = [
+  const alwaysItems = [
     { label: "Home", href: "/", icon: Home },
     { label: "Uploads", href: "/uploads", icon: Database },
+  ];
+
+  const datasetItems = activeDatasetId ? [
     { label: "Cleaning", href: `/cleaning${datasetParam}`, icon: SlidersHorizontal },
     { label: "Visualization", href: `/visualization${datasetParam}`, icon: BarChart3 },
     { label: "Feature Analysis", href: `/feature-analysis${datasetParam}`, icon: Sparkle },
     { label: "AI Insights", href: `/ai-insights${datasetParam}`, icon: Brain },
     { label: "Predictions", href: `/predictions${datasetParam}`, icon: TrendingUp },
-  ];
+  ] : [];
+
+  const navItems = [...alwaysItems, ...datasetItems];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 backdrop-blur-xl bg-background/80">
