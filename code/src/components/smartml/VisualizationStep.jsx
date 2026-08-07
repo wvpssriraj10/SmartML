@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   BarChart2, ScatterChart, LineChart as LineChartIcon, PieChart as PieChartIcon,
-  LayoutGrid, Flame, RefreshCw, BarChart3
+  LayoutGrid, Flame, RefreshCw, BarChart3, ArrowRight
 } from "lucide-react";
 import { API_BASE } from "@/api";
 import {
@@ -38,7 +38,7 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
   );
 };
 
-export function VisualizationStep({ datasetId }) {
+export function VisualizationStep({ datasetId, onDone }) {
   const [meta, setMeta]       = useState(null);   // { columns, numeric_cols, categorical_cols }
   const [preview, setPreview] = useState([]);       // raw data rows
   const [loading, setLoading] = useState(true);
@@ -377,6 +377,14 @@ export function VisualizationStep({ datasetId }) {
           </div>
         );
       })()}
+      {onDone && (
+        <div className="mt-6 flex justify-end">
+          <button onClick={onDone} className="inline-flex items-center gap-2 rounded-xl bg-emerald/15 border border-emerald/40 text-emerald px-5 py-2.5 text-sm font-medium hover:bg-emerald/25">
+            <ArrowRight className="h-4 w-4" />
+            Continue to Export
+          </button>
+        </div>
+      )}
     </div>
   );
 }

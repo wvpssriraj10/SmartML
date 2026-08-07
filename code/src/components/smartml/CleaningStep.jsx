@@ -540,6 +540,15 @@ export function CleaningStep({ datasetId, onNavigateToPreview }) {
                 Preview Full Rows Table
               </button>
             )}
+            {onNavigateToPreview && (
+              <button
+                onClick={() => onNavigateToPreview(datasetId)}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald/15 border border-emerald/40 text-emerald py-2.5 text-xs font-medium hover:bg-emerald/25"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                Continue to Configure
+              </button>
+            )}
 
             <button
               onClick={handleUndo}

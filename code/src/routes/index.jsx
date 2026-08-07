@@ -6,6 +6,10 @@ import { AnalyzingStep } from "@/components/smartml/AnalyzingStep";
 import { InspectionStep } from "@/components/smartml/InspectionStep";
 import { TrainingStep } from "@/components/smartml/TrainingStep";
 import { ResultsStep } from "@/components/smartml/ResultsStep";
+import { CleaningStep } from "@/components/smartml/CleaningStep";
+import { VisualizationStep } from "@/components/smartml/VisualizationStep";
+import { PreviewStep } from "@/components/smartml/PreviewStep";
+import { ExportStep } from "@/components/smartml/ExportStep";
 import { Check } from "lucide-react";
 import { setActiveDataset, clearActiveDataset } from "@/lib/active-dataset";
 
@@ -14,11 +18,12 @@ export const Route = createFileRoute("/")({
 });
 
 import { API_BASE } from "@/api";
+// Only 4 models (free tier cap) — XGBoost removed from display
 const MODEL_NAMES = [
   "Logistic Regression",
   "Decision Tree",
   "Random Forest",
-  "XGBoost",
+  "Naive Bayes",
 ];
 
 const KNOWN_MODEL = new Set([
@@ -29,10 +34,12 @@ const KNOWN_MODEL = new Set([
 
 const STEPS = [
   { key: "upload", label: "Dataset" },
-  { key: "analyzing", label: "Analyze" },
+  { key: "cleaning", label: "Cleaning" },
   { key: "inspection", label: "Configure" },
   { key: "training", label: "Train" },
   { key: "results", label: "Results" },
+  { key: "visualization", label: "Visualize" },
+  { key: "export", label: "Export" },
 ];
 
 function makeId() {
@@ -188,7 +195,9 @@ function SmartMLApp() {
     }
   };
 
-  const handleAnalyzed = () => setStep("inspection");
+  const handleAnalyzed = () => setStep("cleaning");
+
+  const handleCleaningDone = () => setStep("inspection");
 
   const handleStartTraining = async (cfg) => {
     if (!jobId) return;
@@ -220,6 +229,10 @@ function SmartMLApp() {
       setStep("inspection");
     }
   };
+
+  const handleResultsDone = () => setStep("visualization");
+
+  const handleVisualizationDone = () => setStep("export");
 
   const handleNewSession = () => {
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -357,7 +370,7 @@ function SmartMLApp() {
       setBackendResults(data);
       setResults(mapped.ranked);
       setStep("results");
-      pushAssistant(`Done! "${mapped.ranked[0]?.name || "Best model"}" took the crown. Open the leaderboard for the full ranking, or download the deployable bundle when you're ready.`);
+      pushAssistant(`Done! "${mapped.ranked[0]?.name || "Best model"}" took the crown. Open the leaderboard for the full ranking, or continue to visualizations.`);
     } catch (err) {
       pushAssistant(`Could not fetch results: ${err.message}`);
     }
@@ -489,6 +502,9 @@ function SmartMLApp() {
 
           {step === "upload" && <UploadStep onUploaded={handleUploaded} onResumeJob={handleResumeJob} recentJobs={recentJobs} />}
           {step === "analyzing" && <AnalyzingStep fileName={file?.name ?? "dataset"} ready={analysisReady} onDone={handleAnalyzed} />}
+          {step === "cleaning" && jobId && (
+            <CleaningStep datasetId={jobId} onNavigateToPreview={handleCleaningDone} />
+          )}
           {step === "inspection" && inspection && (
             <InspectionStep inspection={inspection} onStartTraining={handleStartTraining} />
           )}
@@ -511,6 +527,20 @@ function SmartMLApp() {
               target={trainCfg?.target}
               onNewSession={handleNewSession}
               onDownload={handleDownload}
+              onContinue={handleResultsDone}
+            />
+          )}
+          {step === "visualization" && jobId && (
+            <VisualizationStep datasetId={jobId} onDone={handleVisualizationDone} />
+          )}
+          {step === "export" && jobId && results && inspection && backendResults && (
+            <ExportStep
+              jobId={jobId}
+              results={results}
+              inspection={inspection}
+              backendResults={backendResults}
+              trainCfg={trainCfg}
+              onNewSession={handleNewSession}
             />
           )}
 

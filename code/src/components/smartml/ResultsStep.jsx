@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { Trophy, Download, RotateCcw, Medal, Sparkles, Lightbulb, Info } from "lucide-react";
+import { Trophy, Download, RotateCcw, Medal, Sparkles, Lightbulb, Info, ArrowRight } from "lucide-react";
 import { generateDistribution, championInsight } from "@/lib/smartml-mock";
 
-export function ResultsStep({ results, problemType, columns, target, onNewSession, onDownload }) {
+export function ResultsStep({ results, problemType, columns, target, onNewSession, onDownload, onContinue }) {
   const champion = results[0];
   const metricKeys = Object.keys(champion.metrics);
   const [activeMetric, setActiveMetric] = useState(metricKeys[0]);
@@ -63,6 +63,12 @@ export function ResultsStep({ results, problemType, columns, target, onNewSessio
               <Download className="h-4 w-4" />
               Download Deployable Code
             </button>
+            {onContinue && (
+              <button onClick={onContinue} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald/15 border border-emerald/40 text-emerald px-5 py-2.5 text-sm font-medium hover:bg-emerald/25">
+                <ArrowRight className="h-4 w-4" />
+                Continue to Visualizations
+              </button>
+            )}
             <button onClick={onNewSession} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/70 bg-card/60 px-5 py-2.5 text-sm font-medium hover:bg-accent">
               <RotateCcw className="h-4 w-4" />
               Start New Session
