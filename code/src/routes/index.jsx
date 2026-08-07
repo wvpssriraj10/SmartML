@@ -286,21 +286,7 @@ function SmartMLApp() {
         setTrainingProgress(data.progress?.percent ?? 0);
         setTrainingLogs(data.logs || []);
 
-        const nextStates = (() => {
-          const roster = [...MODEL_NAMES];
-          const add = (name) => {
-            const key = name.trim().toLowerCase();
-            if (!name || !KNOWN_MODEL.has(name) || roster.some((m) => m.toLowerCase() === key)) return;
-            roster.push(name);
-          };
-          (data.logs || []).forEach((entry) => {
-            const raw = entry?.message || "";
-            const m = raw.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
-            if (m && m[1]) add(m[1].trim());
-          });
-          if (data.progress?.current_model) add(data.progress.current_model);
-          return roster.map((name) => ({ name, status: "queued", progress: 0 }));
-        })();
+        const nextStates = MODEL_NAMES.map((name) => ({ name, status: "queued", progress: 0 }));
 
         (data.logs || []).forEach((entry) => {
           const raw = entry?.message || "";

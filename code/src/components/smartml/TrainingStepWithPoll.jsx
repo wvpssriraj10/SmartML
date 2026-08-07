@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { TrainingStep } from "@/components/smartml/TrainingStep";
 import { API_BASE } from "@/api";
 
-const FALLBACK_MODELS = [
+// Must match MODEL_NAMES in index.jsx (free-tier cap: 4 models)
+const MODEL_LIST = [
   "Logistic Regression",
   "Decision Tree",
   "Random Forest",
-  "XGBoost",
+  "Naive Bayes",
 ];
 
 function parseModelName(message) {
@@ -15,13 +16,6 @@ function parseModelName(message) {
   const m = message.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
   return m && m[1] ? m[1].trim() : null;
 }
-
-// Keep a small whitelist so we don't surface arbitrary log fragments as models.
-const KNOWN = new Set([
-  "Logistic Regression", "Ridge Classifier", "Decision Tree", "Random Forest",
-  "Gradient Boosting", "XGBoost", "LightGBM", "SVM", "KNN", "Neural Net",
-  "Naive Bayes", "Ridge Regression", "Lasso Regression",
-]);
 
 function modelKey(name) {
   return name.trim().toLowerCase();
@@ -46,7 +40,8 @@ export function TrainingStepWithPoll({ datasetId }) {
     setStatus("queued");
     setProgress(0);
     setLogs([]);
-    setModels([]);
+    // Initialize with fixed 4-model roster
+    setModels(MODEL_LIST.map((name) => ({ name, status: "queued", progress: 0 })));
 
     const elapsedTimer = window.setInterval(() => {
       if (!doneRef.current) {
@@ -67,34 +62,7 @@ export function TrainingStepWithPoll({ datasetId }) {
         if (data.target_column) setTarget(data.target_column);
         if (data.problem_type) setProblemType(data.problem_type);
 
-        // Merge any newly-seen models into the roster (seeded by logs + current_model)
-        setModels((prev) => {
-          let next = [...prev];
-          const seen = new Set(next.map((m) => modelKey(m.name)));
-          const addMany = (names) => {
-            for (const raw of names) {
-              const name = (raw || "").trim();
-              if (!name || !KNOWN.has(name)) continue;
-              const key = modelKey(name);
-              if (!seen.has(key)) {
-                next.push({ name, status: "queued", progress: 0 });
-                seen.add(key);
-              }
-            }
-          };
-
-          if (Array.isArray(data.logs)) {
-            for (const entry of data.logs) {
-              const name = parseModelName(entry?.message);
-              if (name) addMany([name]);
-            }
-          }
-          if (data.progress?.current_model) addMany([data.progress.current_model]);
-
-          return next;
-        });
-
-        // Apply current state to each model from logs
+        // Update status for models in our fixed roster only
         setModels((prev) => {
           const next = prev.map((m) => ({ ...m }));
           const idxOf = (name) => {
@@ -109,7 +77,10 @@ export function TrainingStepWithPoll({ datasetId }) {
           (data.logs || []).forEach((entry) => {
             const raw = entry?.message || "";
             const name = parseModelName(raw);
-            if (!name || !KNOWN.has(name)) return;
+            if (!name) return;
+            // Only update if model is in our roster
+            const idx = idxOf(name);
+            if (idx === -1) return;
             if (/ completed\./.test(raw)) apply(name, (m) => ({ ...m, status: "completed", progress: 100 }));
             else if (/ failed:/.test(raw)) apply(name, (m) => ({ ...m, status: "failed", progress: 100 }));
             else if (/^Training/.test(raw)) apply(name, (m) => ({ ...m, status: "training", progress: Math.max(m.progress, 30) }));
