@@ -111,9 +111,9 @@ export function ResultsStep({ results, problemType, columns, target, onNewSessio
               <li key={m.key} className={`text-[11px] leading-relaxed interactive-card animate-fade-in-up stagger-${(i % 8) + 1}`}>
                 <div className="flex items-baseline gap-2">
                   <span className="font-mono text-xs font-semibold text-foreground">{m.label}</span>
-                  <span className="font-mono text-[10px] text-cyan">
-                    {champion.metrics[m.key] !== undefined ? champion.metrics[m.key].toFixed(4) : "—"}
-                  </span>
+<span className="font-mono text-[10px] text-cyan">
+                      {champion.metrics[m.key] != null ? champion.metrics[m.key].toFixed(4) : "—"}
+                    </span>
                 </div>
                 <div className="text-muted-foreground">{m.why}</div>
               </li>
