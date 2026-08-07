@@ -38,11 +38,14 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
   return new Promise((resolve) => {
     const container = document.createElement("div");
     container.style.position = "fixed";
-    container.style.left = "-9999px";
+    container.style.left = "0";
     container.style.top = "0";
     container.style.width = `${width}px`;
     container.style.height = `${height}px`;
     container.style.background = "white";
+    container.style.zIndex = "9999";
+    container.style.pointerEvents = "none";
+    container.style.opacity = "0";
     document.body.appendChild(container);
 
     const ChartConfig = CHART_TYPES.find(c => c.key === chartType);
@@ -125,14 +128,23 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
         </ResponsiveContainer>
       );
     } else {
-      chartContent = <div>Chart type not supported</div>;
+      chartContent = <div style={{width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666'}}>Chart type not supported</div>;
     }
 
-    // Use ReactDOM to render
     const root = require("react-dom/client").createRoot(container);
     root.render(chartContent);
 
-    setTimeout(() => {
+    // Wait for Recharts to fully render (SVG needs time)
+    const checkRender = () => {
+      const svg = container.querySelector("svg");
+      if (svg && svg.width.baseVal.value > 0 && svg.height.baseVal.value > 0) {
+        captureCanvas();
+      } else {
+        setTimeout(checkRender, 100);
+      }
+    };
+
+    const captureCanvas = () => {
       html2canvas(container, {
         width,
         height,
@@ -140,17 +152,21 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
         scale: 2,
         logging: false,
         useCORS: true,
+        foreignObjectRendering: true, // Better SVG support
       }).then((canvas) => {
         const imgData = canvas.toDataURL("image/png").split(",")[1];
         document.body.removeChild(container);
         root.unmount();
         resolve(imgData);
-      }).catch(() => {
+      }).catch((err) => {
+        console.error("html2canvas error:", err);
         document.body.removeChild(container);
         root.unmount();
         resolve(null);
       });
-    }, 500);
+    };
+
+    setTimeout(checkRender, 300);
   });
 }
 
