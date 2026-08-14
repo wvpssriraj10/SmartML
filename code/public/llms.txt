@@ -1,0 +1,16 @@
+# SmartML — AI-Powered AutoML Dashboard
+
+SmartML is an AI-powered AutoML dashboard. Upload a dataset and get automated
+inspection, cleaning, model training, clustering, anomaly detection,
+visualizations, and export.
+
+## Features
+- Predict mode: automatic model training and comparison (classification and regression)
+- Explore mode: unsupervised clustering (K-Means, PCA, Agglomerative, Gaussian Mixture)
+- Detect mode: anomaly detection (Isolation Forest, Local Outlier Factor)
+- Data quality inspection and cleaning
+- AI assistant chat with dataset context
+- Exportable models, predictions, and reports
+
+## Live app
+- URL: https://smartml-three.vercel.app
