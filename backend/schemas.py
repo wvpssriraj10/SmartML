@@ -60,6 +60,20 @@ class CleaningActionRequest(BaseModel):
     replace_with: Optional[str] = None
 
 
+class ClusterRequest(BaseModel):
+    job_id: str
+    algorithms: Optional[List[str]] = None  # e.g. ["K-Means", "PCA"]; None = defaults
+    n_clusters: int = 5
+    columns: Optional[List[str]] = None  # features to use; None = auto (numeric + low-cardinality)
+
+
+class AnomalyRequest(BaseModel):
+    job_id: str
+    detectors: Optional[List[str]] = None  # e.g. ["Isolation Forest"]; None = defaults
+    contamination: float = 0.05  # expected share of unusual rows (0.01–0.5)
+    columns: Optional[List[str]] = None  # features to use; None = auto
+
+
 class DatasetResponse(BaseModel):
     id: str
     name: str

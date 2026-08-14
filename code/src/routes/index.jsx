@@ -10,8 +10,20 @@ import { CleaningStep } from "@/components/smartml/CleaningStep";
 import { VisualizationStep } from "@/components/smartml/VisualizationStep";
 import { PreviewStep } from "@/components/smartml/PreviewStep";
 import { ExportStep } from "@/components/smartml/ExportStep";
+import { ModeSelector } from "@/components/smartml/ModeSelector";
+import { ClusterConfigStep } from "@/components/smartml/ClusterConfigStep";
+import { ClusterTrainStep } from "@/components/smartml/ClusterTrainStep";
+import { ClusterResultsStep } from "@/components/smartml/ClusterResultsStep";
+import { ClusterExportStep } from "@/components/smartml/ClusterExportStep";
+import { ClusterVisualizeStep } from "@/components/smartml/ClusterVisualizeStep";
+import { AnomalyConfigStep } from "@/components/smartml/AnomalyConfigStep";
+import { AnomalyTrainStep } from "@/components/smartml/AnomalyTrainStep";
+import { AnomalyResultsStep } from "@/components/smartml/AnomalyResultsStep";
+import { AnomalyVisualizeStep } from "@/components/smartml/AnomalyVisualizeStep";
+import { AnomalyExportStep } from "@/components/smartml/AnomalyExportStep";
 import { Check } from "lucide-react";
 import { setActiveDataset, clearActiveDataset } from "@/lib/active-dataset";
+import { ML_MODES } from "@/lib/ml-modes";
 
 export const Route = createFileRoute("/")({
   component: SmartMLApp,
@@ -32,22 +44,21 @@ const KNOWN_MODEL = new Set([
   "Naive Bayes", "Ridge Regression", "Lasso Regression",
 ]);
 
-const STEPS = [
-  { key: "upload", label: "Dataset" },
-  { key: "cleaning", label: "Cleaning" },
-  { key: "inspection", label: "Configure" },
-  { key: "training", label: "Train" },
-  { key: "results", label: "Results" },
-  { key: "visualization", label: "Visualize" },
-  { key: "export", label: "Export" },
-];
+const STEPS_FOR = {
+  predict: ML_MODES.predict.steps,
+  explore: ML_MODES.explore.steps,
+  detect: ML_MODES.detect.steps,
+};
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
 function SmartMLApp() {
-  const [step, setStep] = useState("upload");
+  const [mode, setMode] = useState(
+    () => localStorage.getItem("smartml_mode") || "predict",
+  );
+  const [step, setStep] = useState("mode");
   const [connected, setConnected] = useState(false);
   const [file, setFile] = useState(null);
   const [jobId, setJobId] = useState(null);
@@ -62,6 +73,22 @@ function SmartMLApp() {
   const [modelStates, setModelStates] = useState([]);
   const [trainingElapsed, setTrainingElapsed] = useState(0);
   const [recentJobs, setRecentJobs] = useState([]);
+
+  const [clusterCfg, setClusterCfg] = useState(null);
+  const [clusterResults, setClusterResults] = useState(null);
+  const [clusterLogs, setClusterLogs] = useState([]);
+  const [clusterAlgoStates, setClusterAlgoStates] = useState([]);
+  const [clusterStatus, setClusterStatus] = useState("queued");
+  const [clusterProgress, setClusterProgress] = useState(0);
+  const [clusterElapsed, setClusterElapsed] = useState(0);
+
+  const [anomalyCfg, setAnomalyCfg] = useState(null);
+  const [anomalyResults, setAnomalyResults] = useState(null);
+  const [anomalyLogs, setAnomalyLogs] = useState([]);
+  const [anomalyAlgoStates, setAnomalyAlgoStates] = useState([]);
+  const [anomalyStatus, setAnomalyStatus] = useState("queued");
+  const [anomalyProgress, setAnomalyProgress] = useState(0);
+  const [anomalyElapsed, setAnomalyElapsed] = useState(0);
 
   const [chat, setChat] = useState([
     {
@@ -100,6 +127,22 @@ function SmartMLApp() {
     setChat((c) => [...c, { id: makeId(), role: "user", content }]);
   const pushAssistant = (content) =>
     setChat((c) => [...c, { id: makeId(), role: "assistant", content }]);
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    localStorage.setItem("smartml_mode", newMode);
+    pushUser(`I want to: ${ML_MODES[newMode].label}`);
+    if (newMode === "predict") {
+      setStep("upload");
+      pushAssistant("Predict mode selected — upload a dataset and I'll inspect it, suggest a target, and train the best model.");
+    } else if (newMode === "explore") {
+      setStep("upload");
+      pushAssistant("Explore mode selected — upload a dataset and I'll group it into clusters, no target needed.");
+    } else {
+      setStep("upload");
+      pushAssistant("Detect mode selected — upload a dataset and I'll flag the unusual rows that stand out from the rest.");
+    }
+  };
 
   const resolvedProblem =
     trainCfg?.problemType === "regression" ? "regression" :
@@ -197,7 +240,11 @@ function SmartMLApp() {
 
   const handleAnalyzed = () => setStep("cleaning");
 
-  const handleCleaningDone = () => setStep("inspection");
+  const handleCleaningDone = () => {
+    if (mode === "explore") setStep("cluster-config");
+    else if (mode === "detect") setStep("anomaly-config");
+    else setStep("inspection");
+  };
 
   const handleStartTraining = async (cfg) => {
     if (!jobId) return;
@@ -238,7 +285,7 @@ function SmartMLApp() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (pollRef.current) window.clearInterval(pollRef.current);
     clearActiveDataset();
-    setStep("upload");
+    setStep(mode === "predict" ? "upload" : "mode");
     setConnected(connected);
     setFile(null);
     setJobId(null);
@@ -252,6 +299,20 @@ function SmartMLApp() {
     setTrainingLogs([]);
     setModelStates([]);
     setTrainingElapsed(0);
+    setClusterCfg(null);
+    setClusterResults(null);
+    setClusterLogs([]);
+    setClusterAlgoStates([]);
+    setClusterStatus("queued");
+    setClusterProgress(0);
+    setClusterElapsed(0);
+    setAnomalyCfg(null);
+    setAnomalyResults(null);
+    setAnomalyLogs([]);
+    setAnomalyAlgoStates([]);
+    setAnomalyStatus("queued");
+    setAnomalyProgress(0);
+    setAnomalyElapsed(0);
     setChat([{
       id: makeId(),
       role: "assistant",
@@ -370,6 +431,8 @@ function SmartMLApp() {
         throw new Error(text || `Load job failed (${r.status})`);
       }
       const data = await r.json();
+      setMode("predict");
+      localStorage.setItem("smartml_mode", "predict");
       setFile({ name: data.filename });
       setActiveDataset(data.job_id);
       const mappedInspection = mapInspection(data.inspection, data.filename);
@@ -417,6 +480,298 @@ function SmartMLApp() {
     }
   };
 
+  const handleStartClustering = async (cfg) => {
+    if (!jobId) return;
+    setClusterCfg(cfg);
+    setStep("cluster-train");
+    setClusterElapsed(0);
+    setClusterStatus("queued");
+    setClusterProgress(0);
+    setClusterLogs([]);
+    setClusterAlgoStates((cfg.algorithms || []).map((name) => ({ name, status: "queued", progress: 0 })));
+    pushAssistant(`Starting clustering with ${(cfg.algorithms || []).length} algorithm${(cfg.algorithms || []).length === 1 ? "" : "s"} — I'll narrate as each one finishes.`);
+
+    try {
+      const r = await fetch(`${API_BASE}/cluster`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: jobId,
+          algorithms: cfg.algorithms,
+          n_clusters: cfg.n_clusters,
+          columns: cfg.columns?.length ? cfg.columns : null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "Failed to start clustering");
+      startPollingCluster(jobId, cfg.algorithms || []);
+    } catch (err) {
+      pushAssistant(`Could not start clustering: ${err.message}`);
+      setStep("cluster-config");
+    }
+  };
+
+  const startPollingCluster = (activeJobId, algos) => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    if (pollRef.current) window.clearInterval(pollRef.current);
+
+    timerRef.current = window.setInterval(() => {
+      setClusterElapsed((v) => v + 1);
+    }, 1000);
+
+    const poll = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/status/${activeJobId}`);
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          throw new Error(`Status check failed (${r.status}): ${text.slice(0, 200)}`);
+        }
+        let data;
+        try {
+          data = await r.json();
+        } catch {
+          throw new Error("Backend returned invalid JSON (may be restarting)");
+        }
+        setClusterStatus(data.status || "running");
+        setClusterProgress(data.progress?.percent ?? 0);
+        setClusterLogs(data.logs || []);
+
+        const nextStates = algos.map((name) => ({ name, status: "queued", progress: 0 }));
+        (data.logs || []).forEach((entry) => {
+          const raw = entry?.message || "";
+          const m = raw.match(/^([\w .-]+?)(: fitting on.*)?(\.{3}| complete\.| completed\.| failed:.*|\.)?$/i);
+          const matchedName = algos.find((a) => a.toLowerCase() === (m?.[1] || "").trim().toLowerCase());
+          if (!matchedName) return;
+          const idx = nextStates.findIndex((s) => s.name === matchedName);
+          if (idx === -1) return;
+          if (/complete|completed/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "completed", progress: 100 };
+          } else if (/failed:/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "failed", progress: 100 };
+          } else if (/fitting/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "running", progress: 30 };
+          }
+        });
+        if (data.progress?.current_model) {
+          const idx = algos.findIndex((a) => a.toLowerCase() === data.progress.current_model.toLowerCase());
+          if (idx >= 0 && nextStates[idx]?.status === "queued") {
+            nextStates[idx] = { ...nextStates[idx], status: "running", progress: 40 };
+          }
+        }
+        setClusterAlgoStates(nextStates);
+
+        if (data.status === "completed") {
+          window.clearInterval(pollRef.current);
+          window.clearInterval(timerRef.current);
+          await loadClusterResults(activeJobId);
+        }
+        if (data.status === "failed") {
+          window.clearInterval(pollRef.current);
+          window.clearInterval(timerRef.current);
+          setClusterStatus("failed");
+          pushAssistant(`Clustering failed: ${data.message || "Unknown error"} — going back to cluster settings so you can adjust and retry.`);
+          setStep("cluster-config");
+        }
+      } catch (err) {
+        pushAssistant(`Status check error: ${err.message}`);
+      }
+    };
+
+    poll();
+    pollRef.current = window.setInterval(poll, 2000);
+  };
+
+  const loadClusterResults = async (activeJobId) => {
+    try {
+      const r = await fetch(`${API_BASE}/cluster/results/${activeJobId}`);
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(text || `Cluster results fetch failed (${r.status})`);
+      }
+      const data = await r.json();
+      setClusterResults(data.results || []);
+      setClusterStatus("completed");
+      setStep("cluster-results");
+      const summary = data.summary || {};
+      pushAssistant(
+        `Clusters ready! ${summary.algorithms_run || data.results?.length} algorithm${data.results?.length === 1 ? "" : "s"} analyzed ${(summary.rows_analyzed ?? 0).toLocaleString()} rows. Explore the map and cluster cards.`,
+      );
+    } catch (err) {
+      pushAssistant(`Could not fetch cluster results: ${err.message}`);
+    }
+  };
+
+  const handleDownloadClusters = async () => {
+    if (!jobId || !clusterResults?.[0]) return;
+    pushAssistant("Packaging cluster assignments + profiles into a ZIP…");
+    try {
+      const r = await fetch(`${API_BASE}/cluster/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, model_name: clusterResults[0].model }),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.detail || "Cluster export failed");
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `smartml_clusters_${clusterResults[0].model.replace(/\s+/g, "_").toLowerCase()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      pushAssistant(`Cluster export failed: ${err.message}`);
+    }
+  };
+
+  const handleStartAnomaly = async (cfg) => {
+    if (!jobId) return;
+    setAnomalyCfg(cfg);
+    setStep("anomaly-train");
+    setAnomalyElapsed(0);
+    setAnomalyStatus("queued");
+    setAnomalyProgress(0);
+    setAnomalyLogs([]);
+    setAnomalyAlgoStates((cfg.detectors || []).map((name) => ({ name, status: "queued", progress: 0 })));
+    pushAssistant(`Scanning your data with ${(cfg.detectors || []).length} detector${(cfg.detectors || []).length === 1 ? "" : "s"} — I'll narrate as each one finishes.`);
+
+    try {
+      const r = await fetch(`${API_BASE}/anomaly`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: jobId,
+          detectors: cfg.detectors,
+          contamination: cfg.contamination,
+          columns: cfg.columns?.length ? cfg.columns : null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "Failed to start anomaly scan");
+      startPollingAnomaly(jobId, cfg.detectors || []);
+    } catch (err) {
+      pushAssistant(`Could not start anomaly scan: ${err.message}`);
+      setStep("anomaly-config");
+    }
+  };
+
+  const startPollingAnomaly = (activeJobId, detectors) => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    if (pollRef.current) window.clearInterval(pollRef.current);
+
+    timerRef.current = window.setInterval(() => {
+      setAnomalyElapsed((v) => v + 1);
+    }, 1000);
+
+    const poll = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/status/${activeJobId}`);
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          throw new Error(`Status check failed (${r.status}): ${text.slice(0, 200)}`);
+        }
+        let data;
+        try {
+          data = await r.json();
+        } catch {
+          throw new Error("Backend returned invalid JSON (may be restarting)");
+        }
+        setAnomalyStatus(data.status || "running");
+        setAnomalyProgress(data.progress?.percent ?? 0);
+        setAnomalyLogs(data.logs || []);
+
+        const nextStates = detectors.map((name) => ({ name, status: "queued", progress: 0 }));
+        (data.logs || []).forEach((entry) => {
+          const raw = entry?.message || "";
+          const m = raw.match(/^([\w .-]+?)(: fitting on.*)?(\.{3}| complete\.| completed\.| failed:.*|\.)?$/i);
+          const matchedName = detectors.find((d) => d.toLowerCase() === (m?.[1] || "").trim().toLowerCase());
+          if (!matchedName) return;
+          const idx = nextStates.findIndex((s) => s.name === matchedName);
+          if (idx === -1) return;
+          if (/complete|completed/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "completed", progress: 100 };
+          } else if (/failed:/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "failed", progress: 100 };
+          } else if (/fitting/i.test(raw)) {
+            nextStates[idx] = { ...nextStates[idx], status: "running", progress: 30 };
+          }
+        });
+        if (data.progress?.current_model) {
+          const idx = detectors.findIndex((d) => d.toLowerCase() === data.progress.current_model.toLowerCase());
+          if (idx >= 0 && nextStates[idx]?.status === "queued") {
+            nextStates[idx] = { ...nextStates[idx], status: "running", progress: 40 };
+          }
+        }
+        setAnomalyAlgoStates(nextStates);
+
+        if (data.status === "completed") {
+          window.clearInterval(pollRef.current);
+          window.clearInterval(timerRef.current);
+          await loadAnomalyResults(activeJobId);
+        }
+        if (data.status === "failed") {
+          window.clearInterval(pollRef.current);
+          window.clearInterval(timerRef.current);
+          setAnomalyStatus("failed");
+          pushAssistant(`Anomaly scan failed: ${data.message || "Unknown error"} — going back to detector settings so you can adjust and retry.`);
+          setStep("anomaly-config");
+        }
+      } catch (err) {
+        pushAssistant(`Status check error: ${err.message}`);
+      }
+    };
+
+    poll();
+    pollRef.current = window.setInterval(poll, 2000);
+  };
+
+  const loadAnomalyResults = async (activeJobId) => {
+    try {
+      const r = await fetch(`${API_BASE}/anomaly/results/${activeJobId}`);
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(text || `Anomaly results fetch failed (${r.status})`);
+      }
+      const data = await r.json();
+      setAnomalyResults(data);
+      setAnomalyStatus("completed");
+      setStep("anomaly-results");
+      const summary = data.summary || {};
+      pushAssistant(
+        `Scan complete! ${summary.detectors_run || data.results?.length} detector${data.results?.length === 1 ? "" : "s"} flagged ${(summary.flagged_count ?? 0).toLocaleString()} unusual rows across ${(summary.rows_analyzed ?? 0).toLocaleString()} analyzed. Review the flagged rows and export when ready.`,
+      );
+    } catch (err) {
+      pushAssistant(`Could not fetch anomaly results: ${err.message}`);
+    }
+  };
+
+  const handleDownloadAnomaly = async () => {
+    if (!jobId || !anomalyResults?.results?.[0]) return;
+    pushAssistant("Packaging anomaly scores + profiles into a ZIP…");
+    try {
+      const r = await fetch(`${API_BASE}/anomaly/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, model_name: anomalyResults.results[0].detector }),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.detail || "Anomaly export failed");
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `smartml_anomalies_${anomalyResults.results[0].detector.replace(/\s+/g, "_").toLowerCase()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      pushAssistant(`Anomaly export failed: ${err.message}`);
+    }
+  };
+
   const sendChatMessage = async (text) => {
     if (!jobId) {
       return "Upload a dataset first so I can answer with your dataset context.";
@@ -451,14 +806,19 @@ function SmartMLApp() {
     }
   };
 
+  const STEPS = STEPS_FOR[mode] || STEPS_FOR.predict;
   const currentIdx = STEPS.findIndex((s) => s.key === step);
 
   return (
     <>
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-12">
         <main className="min-w-0 lg:col-span-12">
-          {/* Stepper — hidden until past upload step */}
-          {step !== "upload" && (
+          {step === "mode" && (
+            <ModeSelector mode={mode} onChange={handleModeChange} />
+          )}
+
+          {/* Stepper — hidden on mode / upload steps */}
+          {step !== "upload" && step !== "mode" && (
             <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-1">
               {STEPS.map((s, i) => {
                 const done = i < currentIdx;
@@ -505,6 +865,83 @@ function SmartMLApp() {
               models={modelStates}
             />
           )}
+          {step === "cluster-config" && inspection && (
+            <ClusterConfigStep inspection={inspection} onStart={handleStartClustering} />
+          )}
+          {step === "cluster-train" && (
+            <ClusterTrainStep
+              algorithms={clusterCfg?.algorithms || []}
+              status={clusterStatus}
+              progress={clusterProgress}
+              elapsed={clusterElapsed}
+              logs={clusterLogs}
+              modelStates={clusterAlgoStates}
+            />
+          )}
+          {step === "cluster-results" && clusterResults && (
+            <ClusterResultsStep
+              results={clusterResults}
+              summary={clusterResults.summary}
+              onNewSession={handleNewSession}
+              onDownload={handleDownloadClusters}
+              onContinue={() => setStep("cluster-visualize")}
+            />
+          )}
+          {step === "cluster-visualize" && clusterResults && (
+            <ClusterVisualizeStep
+              results={clusterResults}
+              inspection={inspection}
+              onBack={() => setStep("cluster-results")}
+              onDone={() => setStep("cluster-export")}
+            />
+          )}
+          {step === "cluster-export" && clusterResults && (
+            <ClusterExportStep
+              results={clusterResults}
+              summary={clusterResults.summary}
+              onNewSession={handleNewSession}
+              onDownload={handleDownloadClusters}
+              onBack={() => setStep("cluster-visualize")}
+            />
+          )}
+          {step === "anomaly-config" && inspection && (
+            <AnomalyConfigStep inspection={inspection} onStart={handleStartAnomaly} />
+          )}
+          {step === "anomaly-train" && (
+            <AnomalyTrainStep
+              detectors={anomalyCfg?.detectors || []}
+              status={anomalyStatus}
+              progress={anomalyProgress}
+              elapsed={anomalyElapsed}
+              logs={anomalyLogs}
+              modelStates={anomalyAlgoStates}
+            />
+          )}
+          {step === "anomaly-results" && anomalyResults && (
+            <AnomalyResultsStep
+              results={anomalyResults.results || []}
+              summary={anomalyResults.summary}
+              onNewSession={handleNewSession}
+              onDownload={handleDownloadAnomaly}
+              onContinue={() => setStep("anomaly-visualize")}
+            />
+          )}
+          {step === "anomaly-visualize" && anomalyResults && (
+            <AnomalyVisualizeStep
+              results={anomalyResults.results || []}
+              onBack={() => setStep("anomaly-results")}
+              onDone={() => setStep("anomaly-export")}
+            />
+          )}
+          {step === "anomaly-export" && anomalyResults && (
+            <AnomalyExportStep
+              results={anomalyResults.results || []}
+              summary={anomalyResults.summary}
+              onNewSession={handleNewSession}
+              onDownload={handleDownloadAnomaly}
+              onBack={() => setStep("anomaly-visualize")}
+            />
+          )}
           {step === "results" && results && inspection && backendResults && (
             <ResultsStep
               results={results}
@@ -532,7 +969,7 @@ function SmartMLApp() {
 
         </main>
       </div>
-      <ChatFab messages={chat} onSend={pushUser} onAssistantReply={pushAssistant} onAsk={sendChatMessage} />
+      <ChatFab messages={chat} mode={mode} onSend={pushUser} onAssistantReply={pushAssistant} onAsk={sendChatMessage} />
     </>
   );
 }

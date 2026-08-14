@@ -72,6 +72,8 @@ def init_db():
             progress TEXT,
             logs TEXT,
             error TEXT,
+            cluster_results TEXT,
+            anomaly_results TEXT,
             created_at TEXT,
             updated_at TEXT
         )
@@ -90,6 +92,8 @@ def init_db():
             ("artifact_path",      "ADD COLUMN IF NOT EXISTS artifact_path TEXT"),
             ("progress",           "ADD COLUMN IF NOT EXISTS progress TEXT"),
             ("logs",               "ADD COLUMN IF NOT EXISTS logs TEXT"),
+            ("cluster_results",    "ADD COLUMN IF NOT EXISTS cluster_results TEXT"),
+            ("anomaly_results",    "ADD COLUMN IF NOT EXISTS anomaly_results TEXT"),
         ]
         for col, suffix in migrations:
             if col not in existing:
@@ -103,6 +107,8 @@ def init_db():
             ("artifact_path",      "ALTER TABLE jobs ADD COLUMN artifact_path TEXT"),
             ("progress",           "ALTER TABLE jobs ADD COLUMN progress TEXT"),
             ("logs",               "ALTER TABLE jobs ADD COLUMN logs TEXT"),
+            ("cluster_results",    "ALTER TABLE jobs ADD COLUMN cluster_results TEXT"),
+            ("anomaly_results",    "ALTER TABLE jobs ADD COLUMN anomaly_results TEXT"),
         ]
         for col, sql in migrations:
             if col not in existing:

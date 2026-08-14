@@ -1,9 +1,47 @@
-import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb, Sun, Moon } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
+
+const THEME_KEY = "smartml_theme";
+
+function getInitialTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function applyTheme(theme, animate = false) {
+  const root = document.documentElement;
+  if (animate) {
+    root.classList.add("theme-anim");
+    window.setTimeout(() => root.classList.remove("theme-anim"), 450);
+  }
+  root.classList.toggle("light", theme === "light");
+  try { localStorage.setItem(THEME_KEY, theme); } catch {}
+}
+
+applyTheme(getInitialTheme());
 
 export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+
+  const [theme, setTheme] = useState(getInitialTheme);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (theme) applyTheme(theme, true);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   const datasetParam = activeDatasetId ? `?datasetId=${activeDatasetId}` : '';
 
@@ -60,6 +98,15 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
         </nav>
 
         <div className="flex items-center gap-3 animate-fade-in-up stagger-1">
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-card/60 text-muted-foreground transition hover:text-foreground hover:bg-accent/60 hover:scale-105"
+          >
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+
           <div className="hidden items-center gap-2 rounded-full border border-border/60 bg-card/50 px-3 py-1.5 text-xs md:flex interactive-card">
             <span className={`relative flex h-2 w-2`}>
               <span className={`absolute inline-flex h-full w-full rounded-full ${connected ? "bg-emerald animate-ping" : "bg-amber"} opacity-60`} />

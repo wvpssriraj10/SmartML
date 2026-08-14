@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, X, MessageSquare } from "lucide-react";
 
-export function ChatFab({ messages = [], onSend, onAssistantReply, onAsk }) {
+export function ChatFab({ messages = [], mode = "predict", onSend, onAssistantReply, onAsk }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [unread, setUnread] = useState(0);
   const scrollRef = useRef(null);
   const lastSeenRef = useRef(messages.length);
+
+  const suggestions =
+    mode === "explore"
+      ? ["How many clusters should I use?", "What do these groups mean?", "Which features drive the split?"]
+      : mode === "detect"
+        ? ["How sensitive should the scan be?", "Why is a row unusual?", "What does the anomaly score mean?"]
+        : ["What target should I pick?", "Which model is best?", "Explain the metrics"];
 
   useEffect(() => {
     if (open) {
@@ -145,7 +152,7 @@ export function ChatFab({ messages = [], onSend, onAssistantReply, onAsk }) {
                 </button>
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {["What target should I pick?", "Which model is best?", "Explain the metrics"].map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s}
                     onClick={() => setInput(s)}

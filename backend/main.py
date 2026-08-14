@@ -47,8 +47,8 @@ from .database import (
     init_db, create_job, update_job, get_job, list_jobs,
     create_dataset, update_dataset, get_dataset, list_datasets, delete_dataset
 )
-from .schemas import TrainRequest, UploadResponse, StatusResponse, ChatRequest, ChatResponse, ExportRequest, CleaningActionRequest
-from .worker import start_training
+from .schemas import TrainRequest, UploadResponse, StatusResponse, ChatRequest, ChatResponse, ExportRequest, CleaningActionRequest, ClusterRequest, AnomalyRequest
+from .worker import start_training, start_clustering, start_anomaly
 from .llm_agent import chat_with_agent
 from .exporter import generate_inference_code, generate_requirements, generate_readme
 import pandas as pd
@@ -589,6 +589,243 @@ def train_model(req: TrainRequest):
     return {"job_id": req.job_id, "status": "queued", "message": "Training started in background. Poll /api/status for updates."}
 
 
+# ─── Clustering (Explore mode) ────────────────────────────────────────────────
+
+@app.get("/api/cluster/meta")
+def cluster_meta():
+    from ml_engine.clustering import _metadata
+    return _metadata()
+
+
+@app.post("/api/cluster")
+def cluster_run(req: ClusterRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not os.path.exists(job['file_path']):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+    if job['status'] == 'running':
+        raise HTTPException(status_code=400, detail="A job is already running on this dataset")
+
+    if req.n_clusters < 2 or req.n_clusters > 50:
+        raise HTTPException(status_code=400, detail="n_clusters must be between 2 and 50")
+
+    update_job(
+        req.job_id,
+        status='queued',
+        target_column=None,
+        cluster_results=None,
+        anomaly_results=None,
+        results=None,
+        data_report=None,
+        error=None,
+    )
+
+    start_clustering(
+        job_id=req.job_id,
+        file_path=job['file_path'],
+        algorithms=req.algorithms,
+        n_clusters=req.n_clusters,
+        columns=req.columns,
+    )
+
+    return {"job_id": req.job_id, "status": "queued",
+            "message": "Clustering started in background. Poll /api/status for updates."}
+
+
+@app.get("/api/cluster/results/{job_id}")
+def get_cluster_results(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail=f"Clustering not completed. Current status: {job['status']}")
+    if not job.get('cluster_results'):
+        raise HTTPException(status_code=409, detail="No clustering results stored for this job.")
+
+    cluster_results = json.loads(job['cluster_results'])
+    return {
+        "job_id": job_id,
+        "filename": job['original_filename'],
+        "task_type": "cluster",
+        **cluster_results,
+    }
+
+
+@app.post("/api/cluster/export")
+def export_cluster_results(req: ExportRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Clustering must be completed before export.")
+    if not job.get('cluster_results'):
+        raise HTTPException(status_code=409, detail="No clustering results stored for this job.")
+
+    cluster_results = json.loads(job['cluster_results'])
+    model = req.model_name
+    selected = None
+    for r in cluster_results.get('results', []):
+        if r['model'] == model:
+            selected = r
+            break
+    if not selected:
+        selected = (cluster_results.get('results') or [None])[0]
+    if not selected:
+        raise HTTPException(status_code=409, detail="No clustering model results to export.")
+
+    # Build CSV: row_index, cluster, followed by the raw dataset row
+    labels = selected.get('cluster_labels', [])
+    file_path = job['file_path']
+    inspector = DatasetInspector(file_path)
+    inspector.load()
+    df = inspector.df
+    if len(df) > len(labels):
+        df = df.head(len(labels))
+
+    import io as _io
+    buf = _io.StringIO()
+    df.insert(0, 'cluster', labels)
+    df = df.head(len(labels))
+    df.to_csv(buf, index_label='row_index')
+    buf.seek(0)
+
+    profiles_json = json.dumps(selected.get('profiles', {}), indent=2)
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("cluster_assignments.csv", buf.getvalue())
+        zf.writestr("cluster_profiles.json", profiles_json)
+    zip_buffer.seek(0)
+
+    safe_model = re.sub(r'[^a-z0-9]+', '_', selected['model'].lower()).strip('_')
+    filename = f"SmartML-clusters-{safe_model}.zip"
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# ─── Anomaly Detection ────────────────────────────────────────────────────────
+
+@app.get("/api/anomaly/meta")
+def anomaly_meta():
+    from ml_engine.anomaly import _metadata
+    return _metadata()
+
+
+@app.post("/api/anomaly")
+def anomaly_run(req: AnomalyRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not os.path.exists(job['file_path']):
+        raise HTTPException(status_code=404, detail="Dataset file missing")
+    if job['status'] == 'running':
+        raise HTTPException(status_code=400, detail="A job is already running on this dataset")
+
+    if req.contamination < 0.01 or req.contamination > 0.5:
+        raise HTTPException(status_code=400, detail="contamination must be between 0.01 and 0.5")
+
+    update_job(
+        req.job_id,
+        status='queued',
+        target_column=None,
+        cluster_results=None,
+        anomaly_results=None,
+        results=None,
+        data_report=None,
+        error=None,
+    )
+
+    start_anomaly(
+        job_id=req.job_id,
+        file_path=job['file_path'],
+        detectors=req.detectors,
+        contamination=req.contamination,
+        columns=req.columns,
+    )
+
+    return {"job_id": req.job_id, "status": "queued",
+            "message": "Anomaly detection started in background. Poll /api/status for updates."}
+
+
+@app.get("/api/anomaly/results/{job_id}")
+def get_anomaly_results(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail=f"Anomaly detection not completed. Current status: {job['status']}")
+    if not job.get('anomaly_results'):
+        raise HTTPException(status_code=409, detail="No anomaly results stored for this job.")
+
+    anomaly_results = json.loads(job['anomaly_results'])
+    return {
+        "job_id": job_id,
+        "filename": job['original_filename'],
+        "task_type": "anomaly",
+        **anomaly_results,
+    }
+
+
+@app.post("/api/anomaly/export")
+def export_anomaly_results(req: ExportRequest):
+    job = get_job(req.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Anomaly detection must be completed before export.")
+    if not job.get('anomaly_results'):
+        raise HTTPException(status_code=409, detail="No anomaly results stored for this job.")
+
+    anomaly_results = json.loads(job['anomaly_results'])
+    detector = req.model_name
+    selected = None
+    for r in anomaly_results.get('results', []):
+        if r['detector'] == detector:
+            selected = r
+            break
+    if not selected:
+        selected = (anomaly_results.get('results') or [None])[0]
+    if not selected:
+        raise HTTPException(status_code=409, detail="No anomaly detector results to export.")
+
+    labels = selected.get('anomaly_labels', [])
+    scores = selected.get('scores', [])
+    file_path = job['file_path']
+    inspector = DatasetInspector(file_path)
+    inspector.load()
+    df = inspector.df
+    if len(df) > len(labels):
+        df = df.head(len(labels))
+
+    import io as _io
+    buf = _io.StringIO()
+    out = df.copy().head(len(labels))
+    out.insert(0, 'is_anomaly', labels)
+    out.insert(1, 'anomaly_score', scores)
+    out.to_csv(buf, index_label='row_index')
+    buf.seek(0)
+
+    profiles_json = json.dumps(selected.get('profiles', {}), indent=2)
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("anomaly_scores.csv", buf.getvalue())
+        zf.writestr("anomaly_profiles.json", profiles_json)
+    zip_buffer.seek(0)
+
+    safe_model = re.sub(r'[^a-z0-9]+', '_', selected['detector'].lower()).strip('_')
+    filename = f"SmartML-anomalies-{safe_model}.zip"
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 # ─── Status ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/status/{job_id}")
@@ -597,18 +834,21 @@ def get_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Watchdog: a worker that dies mid-training (e.g. OOM on a constrained host)
-    # leaves the job stuck at "running" forever. If nothing has updated it in a
-    # while, mark it failed so clients stop polling a zombie.
+# Watchdog: a worker that dies mid-processing (e.g. OOM on a constrained
+    # host) leaves the job stuck at "running" forever. If nothing has updated it
+    # in a while, mark it failed so clients stop polling a zombie.
     if job['status'] in ('running', 'queued') and job.get('updated_at'):
         try:
             last = datetime.fromisoformat(job['updated_at'])
             age_minutes = (datetime.now() - last).total_seconds() / 60
             if age_minutes > 5:
-                update_job(job_id, status='failed', error='Worker stopped responding (likely out of memory on the host). Please retry training.')
+                update_job(job_id, status='failed', error='Worker stopped responding (likely out of memory on the host). Please retry.')
                 job = get_job(job_id)
         except (ValueError, TypeError):
             pass
+
+    is_cluster = bool(job.get('cluster_results'))
+    is_anomaly = bool(job.get('anomaly_results'))
 
     response = {
         "job_id": job_id,
@@ -616,6 +856,7 @@ def get_status(job_id: str):
         "filename": job['original_filename'],
         "target_column": job['target_column'],
         "problem_type": job['problem_type'],
+        "task_type": "anomaly" if is_anomaly else ("cluster" if is_cluster else "train"),
         "created_at": job['created_at'],
         "updated_at": job['updated_at']
     }
@@ -627,9 +868,9 @@ def get_status(job_id: str):
                 response[field] = None if field == 'progress' else []
 
     if job['status'] == 'running':
-        response['message'] = "Training models..."
+        response['message'] = "Processing models..." if not (is_cluster or is_anomaly) else ("Clustering data..." if is_cluster else "Scanning for anomalies...")
     elif job['status'] == 'completed':
-        response['message'] = "Training completed"
+        response['message'] = "Processing completed" if not (is_cluster or is_anomaly) else ("Clustering completed" if is_cluster else "Anomaly scan completed")
     elif job['status'] == 'failed':
         response['message'] = job['error']
 
