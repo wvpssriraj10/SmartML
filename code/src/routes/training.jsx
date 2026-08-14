@@ -1,6 +1,8 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { TrainingStepWithPoll } from "@/components/smartml/TrainingStepWithPoll";
+import { lazy, Suspense } from "react";
 import { getActiveDataset } from "@/lib/active-dataset";
+
+const TrainingStepWithPoll = lazy(() => import("@/components/smartml/TrainingStepWithPoll").then((m) => ({ default: m.TrainingStepWithPoll })));
 
 export const Route = createFileRoute("/training")({
   component: TrainingRouteComponent,
@@ -11,6 +13,8 @@ function TrainingRouteComponent() {
   const datasetId = search.datasetId || getActiveDataset();
 
   return (
-    <TrainingStepWithPoll datasetId={datasetId} />
+    <Suspense fallback={<div className="flex items-center justify-center py-24 text-muted-foreground">Loading…</div>}>
+      <TrainingStepWithPoll datasetId={datasetId} />
+    </Suspense>
   );
 }

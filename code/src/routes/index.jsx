@@ -1,29 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ChatFab } from "@/components/smartml/ChatFab";
 import { UploadStep } from "@/components/smartml/UploadStep";
 import { AnalyzingStep } from "@/components/smartml/AnalyzingStep";
-import { InspectionStep } from "@/components/smartml/InspectionStep";
-import { TrainingStep } from "@/components/smartml/TrainingStep";
-import { ResultsStep } from "@/components/smartml/ResultsStep";
-import { CleaningStep } from "@/components/smartml/CleaningStep";
-import { VisualizationStep } from "@/components/smartml/VisualizationStep";
-import { PreviewStep } from "@/components/smartml/PreviewStep";
-import { ExportStep } from "@/components/smartml/ExportStep";
 import { ModeSelector } from "@/components/smartml/ModeSelector";
-import { ClusterConfigStep } from "@/components/smartml/ClusterConfigStep";
-import { ClusterTrainStep } from "@/components/smartml/ClusterTrainStep";
-import { ClusterResultsStep } from "@/components/smartml/ClusterResultsStep";
-import { ClusterExportStep } from "@/components/smartml/ClusterExportStep";
-import { ClusterVisualizeStep } from "@/components/smartml/ClusterVisualizeStep";
-import { AnomalyConfigStep } from "@/components/smartml/AnomalyConfigStep";
-import { AnomalyTrainStep } from "@/components/smartml/AnomalyTrainStep";
-import { AnomalyResultsStep } from "@/components/smartml/AnomalyResultsStep";
-import { AnomalyVisualizeStep } from "@/components/smartml/AnomalyVisualizeStep";
-import { AnomalyExportStep } from "@/components/smartml/AnomalyExportStep";
 import { Check } from "lucide-react";
 import { setActiveDataset, clearActiveDataset } from "@/lib/active-dataset";
 import { ML_MODES } from "@/lib/ml-modes";
+
+const InspectionStep = lazy(() => import("@/components/smartml/InspectionStep").then((m) => ({ default: m.InspectionStep })));
+const TrainingStep = lazy(() => import("@/components/smartml/TrainingStep").then((m) => ({ default: m.TrainingStep })));
+const ResultsStep = lazy(() => import("@/components/smartml/ResultsStep").then((m) => ({ default: m.ResultsStep })));
+const CleaningStep = lazy(() => import("@/components/smartml/CleaningStep").then((m) => ({ default: m.CleaningStep })));
+const VisualizationStep = lazy(() => import("@/components/smartml/VisualizationStep").then((m) => ({ default: m.VisualizationStep })));
+const ExportStep = lazy(() => import("@/components/smartml/ExportStep").then((m) => ({ default: m.ExportStep })));
+const ClusterConfigStep = lazy(() => import("@/components/smartml/ClusterConfigStep").then((m) => ({ default: m.ClusterConfigStep })));
+const ClusterTrainStep = lazy(() => import("@/components/smartml/ClusterTrainStep").then((m) => ({ default: m.ClusterTrainStep })));
+const ClusterResultsStep = lazy(() => import("@/components/smartml/ClusterResultsStep").then((m) => ({ default: m.ClusterResultsStep })));
+const ClusterExportStep = lazy(() => import("@/components/smartml/ClusterExportStep").then((m) => ({ default: m.ClusterExportStep })));
+const ClusterVisualizeStep = lazy(() => import("@/components/smartml/ClusterVisualizeStep").then((m) => ({ default: m.ClusterVisualizeStep })));
+const AnomalyConfigStep = lazy(() => import("@/components/smartml/AnomalyConfigStep").then((m) => ({ default: m.AnomalyConfigStep })));
+const AnomalyTrainStep = lazy(() => import("@/components/smartml/AnomalyTrainStep").then((m) => ({ default: m.AnomalyTrainStep })));
+const AnomalyResultsStep = lazy(() => import("@/components/smartml/AnomalyResultsStep").then((m) => ({ default: m.AnomalyResultsStep })));
+const AnomalyVisualizeStep = lazy(() => import("@/components/smartml/AnomalyVisualizeStep").then((m) => ({ default: m.AnomalyVisualizeStep })));
+const AnomalyExportStep = lazy(() => import("@/components/smartml/AnomalyExportStep").then((m) => ({ default: m.AnomalyExportStep })));
 
 export const Route = createFileRoute("/")({
   component: SmartMLApp,
@@ -813,6 +813,7 @@ function SmartMLApp() {
     <>
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-12">
         <main className="min-w-0 lg:col-span-12">
+          <Suspense fallback={<div className="flex items-center justify-center py-24 text-muted-foreground">Loading…</div>}>
           {step === "mode" && (
             <ModeSelector mode={mode} onChange={handleModeChange} />
           )}
@@ -967,6 +968,7 @@ function SmartMLApp() {
             />
           )}
 
+        </Suspense>
         </main>
       </div>
       <ChatFab messages={chat} mode={mode} onSend={pushUser} onAssistantReply={pushAssistant} onAsk={sendChatMessage} />

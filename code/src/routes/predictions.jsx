@@ -1,6 +1,8 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
-import { PredictionsStep } from "@/components/smartml/PredictionsStep";
+import { lazy, Suspense } from "react";
 import { getActiveDataset } from "@/lib/active-dataset";
+
+const PredictionsStep = lazy(() => import("@/components/smartml/PredictionsStep").then((m) => ({ default: m.PredictionsStep })));
 
 export const Route = createFileRoute("/predictions")({
   component: PredictionsRouteComponent,
@@ -12,9 +14,11 @@ function PredictionsRouteComponent() {
   const datasetId = search.datasetId || getActiveDataset();
 
   return (
-    <PredictionsStep
-      datasetId={datasetId}
-      onNavigateToHome={() => navigate({ to: "/" })}
-    />
+    <Suspense fallback={<div className="flex items-center justify-center py-24 text-muted-foreground">Loading…</div>}>
+      <PredictionsStep
+        datasetId={datasetId}
+        onNavigateToHome={() => navigate({ to: "/" })}
+      />
+    </Suspense>
   );
 }

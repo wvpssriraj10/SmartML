@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { UploadLibraryStep } from "@/components/smartml/UploadLibraryStep";
+import { lazy, Suspense } from "react";
 import { setActiveDataset } from "@/lib/active-dataset";
+
+const UploadLibraryStep = lazy(() => import("@/components/smartml/UploadLibraryStep").then((m) => ({ default: m.UploadLibraryStep })));
 
 export const Route = createFileRoute("/uploads")({
   component: UploadsRouteComponent,
@@ -20,7 +22,8 @@ function UploadsRouteComponent() {
   };
 
   return (
-    <UploadLibraryStep
+    <Suspense fallback={<div className="flex items-center justify-center py-24 text-muted-foreground">Loading…</div>}>
+      <UploadLibraryStep
       libraryOnly
       onUploadSuccess={(data) => {
         const id = data.job_id || data.dataset_id;
@@ -37,5 +40,6 @@ function UploadsRouteComponent() {
         navigate({ to: "/visualization", search: { datasetId: id } });
       }}
     />
+    </Suspense>
   );
 }
