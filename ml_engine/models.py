@@ -110,8 +110,8 @@ def get_smart_models(data_profile):
     available = MODEL_REGISTRY.get(problem_type, {})
 
     if problem_type == 'classification' and n_rows < 1000:
-        priority = ['Logistic Regression', 'Decision Tree', 'KNN', 'Naive Bayes', 'Random Forest',
-                    'SVM', 'Gradient Boosting', 'XGBoost', 'LightGBM', 'Neural Net']
+        priority = ['Logistic Regression', 'Decision Tree', 'Random Forest', 'Naive Bayes',
+                    'KNN', 'SVM', 'Gradient Boosting', 'XGBoost', 'LightGBM', 'Neural Net', 'Ridge Classifier']
     elif problem_type == 'classification' and n_rows > 50000:
         priority = ['LightGBM', 'Logistic Regression', 'Random Forest', 'XGBoost', 'Ridge Classifier',
                     'Gradient Boosting', 'Decision Tree', 'Neural Net', 'KNN', 'SVM']
