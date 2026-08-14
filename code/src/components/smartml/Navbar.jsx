@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb, Sun, Moon } from "lucide-react";
+import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb, Sun, Moon, RotateCcw } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 const THEME_KEY = "smartml_theme";
@@ -117,10 +117,10 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
           </div>
 
           <button
-            onClick={onNewSession}
+            onClick={() => window.dispatchEvent(new Event("smartml:new-session"))}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-card/60 px-3 py-1.5 text-sm font-medium btn-ghost"
           >
-            <Plus className="h-4 w-4" />
+            <RotateCcw className="h-3.5 w-3.5" />
             New Session
           </button>
         </div>

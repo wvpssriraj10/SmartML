@@ -123,6 +123,12 @@ function SmartMLApp() {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const onNewSession = () => handleNewSession();
+    window.addEventListener("smartml:new-session", onNewSession);
+    return () => window.removeEventListener("smartml:new-session", onNewSession);
+  }, []);
+
   const pushUser = (content) =>
     setChat((c) => [...c, { id: makeId(), role: "user", content }]);
   const pushAssistant = (content) =>
