@@ -291,7 +291,7 @@ function SmartMLApp() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (pollRef.current) window.clearInterval(pollRef.current);
     clearActiveDataset();
-    setStep(mode === "predict" ? "upload" : "mode");
+    setStep("mode");
     setConnected(connected);
     setFile(null);
     setJobId(null);

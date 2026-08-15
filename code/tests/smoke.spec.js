@@ -21,4 +21,12 @@ test.describe("Smoke", () => {
     await toggle.click();
     await expect(page.locator("html")).not.toHaveClass(/light/);
   });
+
+  test("New Session resets to mode selector", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /Supervised learning/i }).click();
+    await expect(page.getByRole("heading", { name: /Ship a model in under 60 seconds/i })).toBeVisible();
+    await page.getByRole("button", { name: "New Session" }).click();
+    await expect(page.getByRole("heading", { name: /What are you trying to/i })).toBeVisible();
+  });
 });
