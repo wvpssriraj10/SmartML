@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb, Sun, Moon, RotateCcw } from "lucide-react";
+import { Sparkles, Plus, Wifi, Sparkle, BarChart3, SlidersHorizontal, Brain, TrendingUp, Lightbulb, Sun, Moon, RotateCcw, LogOut } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
+
+import { useAuth } from "@/hooks/useAuth";
 
 const THEME_KEY = "smartml_theme";
 
@@ -29,6 +31,7 @@ applyTheme(getInitialTheme());
 export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const { user, logout } = useAuth();
 
   const [theme, setTheme] = useState(getInitialTheme);
   const isFirstRender = useRef(true);
@@ -122,6 +125,16 @@ export function Navbar({ onNewSession, connected = true, activeDatasetId }) {
           >
             <RotateCcw className="h-3.5 w-3.5" />
             New Session
+          </button>
+
+          <button
+            onClick={logout}
+            aria-label="Sign out"
+            title={user?.email ? `Sign out (${user.email})` : "Sign out"}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-card/60 px-3 text-sm font-medium text-muted-foreground transition hover:text-foreground hover:bg-accent/60"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden md:inline max-w-[120px] truncate">{user?.display_name || user?.email?.split("@")[0] || "Sign out"}</span>
           </button>
         </div>
       </div>

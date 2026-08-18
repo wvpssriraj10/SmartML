@@ -35,8 +35,18 @@ def get_connection():
 def init_db():
     conn = get_connection()
     conn.execute(_translate('''
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            created_at TEXT
+        )
+    '''))
+    conn.execute(_translate('''
         CREATE TABLE IF NOT EXISTS datasets (
             id TEXT PRIMARY KEY,
+            user_id TEXT,
             name TEXT,
             filename TEXT,
             file_path TEXT,
@@ -55,6 +65,7 @@ def init_db():
     conn.execute(_translate('''
         CREATE TABLE IF NOT EXISTS jobs (
             id TEXT PRIMARY KEY,
+            user_id TEXT,
             dataset_id TEXT,
             status TEXT DEFAULT 'pending',
             file_path TEXT,
@@ -86,6 +97,7 @@ def init_db():
             "SELECT column_name FROM information_schema.columns WHERE table_name = 'jobs'"
         ).fetchall()}
         migrations = [
+            ("user_id",          "ADD COLUMN IF NOT EXISTS user_id TEXT"),
             ("dataset_id",         "ADD COLUMN IF NOT EXISTS dataset_id TEXT"),
             ("best_model_name",    "ADD COLUMN IF NOT EXISTS best_model_name TEXT"),
             ("best_model_metrics", "ADD COLUMN IF NOT EXISTS best_model_metrics TEXT"),
@@ -98,9 +110,15 @@ def init_db():
         for col, suffix in migrations:
             if col not in existing:
                 conn.execute(f"ALTER TABLE jobs {suffix}")
+        dset_cols = {r["column_name"] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'datasets'"
+        ).fetchall()}
+        if "user_id" not in dset_cols:
+            conn.execute("ALTER TABLE datasets ADD COLUMN IF NOT EXISTS user_id TEXT")
     else:
         existing = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
         migrations = [
+            ("user_id",          "ALTER TABLE jobs ADD COLUMN user_id TEXT"),
             ("dataset_id",         "ALTER TABLE jobs ADD COLUMN dataset_id TEXT"),
             ("best_model_name",    "ALTER TABLE jobs ADD COLUMN best_model_name TEXT"),
             ("best_model_metrics", "ALTER TABLE jobs ADD COLUMN best_model_metrics TEXT"),
@@ -113,17 +131,20 @@ def init_db():
         for col, sql in migrations:
             if col not in existing:
                 conn.execute(sql)
+        dset_existing = {row[1] for row in conn.execute("PRAGMA table_info(datasets)")}
+        if "user_id" not in dset_existing:
+            conn.execute("ALTER TABLE datasets ADD COLUMN user_id TEXT")
     conn.commit()
     conn.close()
 
 
-def create_dataset(dataset_id, name, filename, file_path, file_size=0, file_type='csv', row_count=0, col_count=0, inspection_data=None):
+def create_dataset(dataset_id, name, filename, file_path, file_size=0, file_type='csv', row_count=0, col_count=0, inspection_data=None, user_id=None):
     conn = get_connection()
     now = datetime.now().isoformat()
     conn.execute(
-        _translate('''INSERT INTO datasets (id, name, filename, file_path, file_size, file_type, status, row_count, col_count, cleaning_pipeline, inspection_data, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, '[]', ?, ?, ?)'''),
-        (dataset_id, name, filename, file_path, file_size, file_type, row_count, col_count, json.dumps(inspection_data) if isinstance(inspection_data, dict) else inspection_data, now, now)
+        _translate('''INSERT INTO datasets (id, user_id, name, filename, file_path, file_size, file_type, status, row_count, col_count, cleaning_pipeline, inspection_data, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, '[]', ?, ?, ?)'''),
+        (dataset_id, user_id, name, filename, file_path, file_size, file_type, row_count, col_count, json.dumps(inspection_data) if isinstance(inspection_data, dict) else inspection_data, now, now)
     )
     conn.commit()
     conn.close()
@@ -140,36 +161,46 @@ def update_dataset(dataset_id, **kwargs):
     conn.close()
 
 
-def get_dataset(dataset_id):
+def get_dataset(dataset_id, user_id=None):
     conn = get_connection()
-    row = conn.execute(_translate('SELECT * FROM datasets WHERE id = ?'), (dataset_id,)).fetchone()
+    if user_id:
+        row = conn.execute(_translate('SELECT * FROM datasets WHERE id = ? AND user_id = ?'), (dataset_id, user_id)).fetchone()
+    else:
+        row = conn.execute(_translate('SELECT * FROM datasets WHERE id = ?'), (dataset_id,)).fetchone()
     conn.close()
     if row:
         return dict(row)
     return None
 
 
-def list_datasets(limit=50):
+def list_datasets(limit=50, user_id=None):
     conn = get_connection()
-    rows = conn.execute(_translate('SELECT * FROM datasets ORDER BY updated_at DESC LIMIT ?'), (limit,)).fetchall()
+    if user_id:
+        rows = conn.execute(_translate('SELECT * FROM datasets WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'), (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute(_translate('SELECT * FROM datasets ORDER BY updated_at DESC LIMIT ?'), (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def delete_dataset(dataset_id):
+def delete_dataset(dataset_id, user_id=None):
     conn = get_connection()
-    conn.execute(_translate('DELETE FROM datasets WHERE id = ?'), (dataset_id,))
-    conn.execute(_translate('DELETE FROM jobs WHERE dataset_id = ?'), (dataset_id,))
+    if user_id:
+        conn.execute(_translate('DELETE FROM datasets WHERE id = ? AND user_id = ?'), (dataset_id, user_id))
+        conn.execute(_translate('DELETE FROM jobs WHERE dataset_id = ? AND user_id = ?'), (dataset_id, user_id))
+    else:
+        conn.execute(_translate('DELETE FROM datasets WHERE id = ?'), (dataset_id,))
+        conn.execute(_translate('DELETE FROM jobs WHERE dataset_id = ?'), (dataset_id,))
     conn.commit()
     conn.close()
 
 
-def create_job(job_id, file_path, original_filename, dataset_id=None):
+def create_job(job_id, file_path, original_filename, dataset_id=None, user_id=None):
     conn = get_connection()
     now = datetime.now().isoformat()
     conn.execute(
-        _translate('INSERT INTO jobs (id, dataset_id, file_path, original_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
-        (job_id, dataset_id, file_path, original_filename, 'uploaded', now, now)
+        _translate('INSERT INTO jobs (id, user_id, dataset_id, file_path, original_filename, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+        (job_id, user_id, dataset_id, file_path, original_filename, 'uploaded', now, now)
     )
     conn.commit()
     conn.close()
@@ -186,18 +217,24 @@ def update_job(job_id, **kwargs):
     conn.close()
 
 
-def get_job(job_id):
+def get_job(job_id, user_id=None):
     conn = get_connection()
-    row = conn.execute(_translate('SELECT * FROM jobs WHERE id = ?'), (job_id,)).fetchone()
+    if user_id:
+        row = conn.execute(_translate('SELECT * FROM jobs WHERE id = ? AND user_id = ?'), (job_id, user_id)).fetchone()
+    else:
+        row = conn.execute(_translate('SELECT * FROM jobs WHERE id = ?'), (job_id,)).fetchone()
     conn.close()
     if row:
         return dict(row)
     return None
 
 
-def list_jobs(limit=20):
+def list_jobs(limit=20, user_id=None):
     conn = get_connection()
-    rows = conn.execute(_translate('SELECT id, dataset_id, original_filename, status, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT ?'), (limit,)).fetchall()
+    if user_id:
+        rows = conn.execute(_translate('SELECT id, dataset_id, original_filename, status, created_at, updated_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'), (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute(_translate('SELECT id, dataset_id, original_filename, status, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT ?'), (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -222,3 +259,39 @@ def append_job_log(job_id, message, level='info', progress=None):
     conn.execute(_translate(sql + ' WHERE id = ?'), values)
     conn.commit()
     conn.close()
+
+
+# ─── Users ─────────────────────────────────────────────────────────────────────
+
+def create_user(user_id, email, password_hash, display_name=None):
+    conn = get_connection()
+    now = datetime.now().isoformat()
+    try:
+        conn.execute(
+            _translate('INSERT INTO users (id, email, password_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?)'),
+            (user_id, email, password_hash, display_name, now)
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def get_user_by_email(email):
+    conn = get_connection()
+    row = conn.execute(_translate('SELECT * FROM users WHERE email = ?'), (email,)).fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+
+def get_user_by_id(user_id):
+    conn = get_connection()
+    row = conn.execute(_translate('SELECT * FROM users WHERE id = ?'), (user_id,)).fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None

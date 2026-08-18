@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 import { uploadFile } from "./helpers.js";
 
 async function goToModeConfig(page, modeName, startButton) {

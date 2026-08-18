@@ -3,6 +3,8 @@ import { Outlet, createRootRoute, useRouter, useSearch } from "@tanstack/react-r
 import { useEffect } from "react";
 
 import { Navbar } from "@/components/smartml/Navbar";
+import { LoginScreen } from "@/components/auth/LoginScreen";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import appCss from "../styles.css?url";
 
 const queryClient = new QueryClient();
@@ -80,7 +82,27 @@ export const Route = createRootRoute({
   errorComponent: ErrorComponent,
 });
 
-function RootComponent() {
+function AppShell() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
+  return (
+    <AuthGate />
+  );
+}
+
+function AuthGate() {
   const search = useSearch({ strict: false });
   const datasetId = search.datasetId;
 
@@ -90,13 +112,21 @@ function RootComponent() {
   }, []);
 
   return (
+    <>
+      <Navbar activeDatasetId={datasetId} />
+      <main className="min-h-screen">
+        <Outlet />
+      </main>
+    </>
+  );
+}
+
+function RootComponent() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen">
-        <Navbar activeDatasetId={datasetId} />
-        <main className="min-h-screen">
-          <Outlet />
-        </main>
-      </div>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

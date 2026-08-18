@@ -8,7 +8,7 @@ import io
 import shutil
 import boto3
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
@@ -45,8 +45,10 @@ from ml_engine.cleaning import apply_cleaning_action, calculate_dataset_metrics
 from ml_engine.ai_insights import generate_executive_insights, generate_pdf_report
 from .database import (
     init_db, create_job, update_job, get_job, list_jobs,
-    create_dataset, update_dataset, get_dataset, list_datasets, delete_dataset
+    create_dataset, update_dataset, get_dataset, list_datasets, delete_dataset,
+    create_user, get_user_by_email, get_user_by_id,
 )
+from .auth import hash_password, verify_password, create_token, verify_token
 from .schemas import TrainRequest, UploadResponse, StatusResponse, ChatRequest, ChatResponse, ExportRequest, CleaningActionRequest, ClusterRequest, AnomalyRequest
 from .worker import start_training, start_clustering, start_anomaly
 from .llm_agent import chat_with_agent
@@ -82,6 +84,63 @@ def health():
     return {"status": "ok", "service": "SmartML Dashboard", "version": "2.0.0"}
 
 
+# ─── Auth ─────────────────────────────────────────────────────────────────────
+
+def get_current_user(authorization: str = Header(None)):
+    """FastAPI dependency resolving the bearer token to a user record."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.split(" ", 1)[1].strip()
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User no longer exists")
+    return user
+
+
+def _public_user(user):
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "display_name": user.get("display_name"),
+        "created_at": user.get("created_at"),
+    }
+
+
+@app.post("/api/auth/register")
+def register(email: str = Form(...), password: str = Form(...), display_name: str = Form(None)):
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email is required")
+    if not password or len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if get_user_by_email(email):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    user_id = str(uuid.uuid4())
+    ok = create_user(user_id, email, hash_password(password), display_name)
+    if not ok:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    user = get_user_by_id(user_id)
+    return {"token": create_token(user_id), "user": _public_user(user)}
+
+
+@app.post("/api/auth/login")
+def login(email: str = Form(...), password: str = Form(...)):
+    email = (email or "").strip().lower()
+    user = get_user_by_email(email) if email else None
+    if not user or not verify_password(password or "", user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"token": create_token(user["id"]), "user": _public_user(user)}
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(get_current_user)):
+    return {"user": _public_user(user)}
+
+
 # ─── Supabase Direct Upload ─────────────────────────────────────────────────────
 
 @app.post("/api/upload/presign")
@@ -105,7 +164,7 @@ def presign_upload(filename: str = Form(...), content_type: str = Form(...)):
 # ─── Upload ───────────────────────────────────────────────────────────────────
 
 @app.post("/api/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -146,7 +205,7 @@ async def upload_file(file: UploadFile = File(...)):
         inspection['suggested_problem_type'] = 'classification' if suggested in inspection.get('categorical_columns', []) or unique_count <= 20 else 'regression'
         inspection.setdefault('kpis', {})['suggested_target'] = suggested
 
-    create_job(job_id, file_path, file.filename)
+    create_job(job_id, file_path, file.filename, user_id=user["id"])
     update_job(job_id, inspection=json.dumps(convert(inspection), indent=2))
 
     # Also register dataset entity
@@ -161,7 +220,8 @@ async def upload_file(file: UploadFile = File(...)):
         file_type=ext.replace('.', ''),
         row_count=inspection['rows'],
         col_count=inspection['columns'],
-        inspection_data=metrics
+        inspection_data=metrics,
+        user_id=user["id"]
     )
 
     return UploadResponse(
@@ -177,6 +237,7 @@ async def complete_supabase_upload(
     key: str = Form(...),
     filename: str = Form(...),
     bucket: str = Form(...),
+    user: dict = Depends(get_current_user),
 ):
     s3 = get_supabase()
     if not s3:
@@ -220,7 +281,7 @@ async def complete_supabase_upload(
         inspection['suggested_problem_type'] = 'classification' if suggested in inspection.get('categorical_columns', []) or unique_count <= 20 else 'regression'
         inspection.setdefault('kpis', {})['suggested_target'] = suggested
 
-    create_job(job_id, file_path, filename)
+    create_job(job_id, file_path, filename, user_id=user["id"])
     update_job(job_id, inspection=json.dumps(convert(inspection), indent=2))
 
     dataset_id = job_id
@@ -234,7 +295,8 @@ async def complete_supabase_upload(
         file_type=ext.replace('.', ''),
         row_count=inspection['rows'],
         col_count=inspection['columns'],
-        inspection_data=metrics
+        inspection_data=metrics,
+        user_id=user["id"]
     )
 
     return UploadResponse(
@@ -248,8 +310,8 @@ async def complete_supabase_upload(
 # ─── DataSense Dataset Library & Cleaning API ─────────────────────────────────
 
 @app.get("/api/datasets")
-def get_datasets_list(limit: int = 50):
-    datasets = list_datasets(limit)
+def get_datasets_list(limit: int = 50, user: dict = Depends(get_current_user)):
+    datasets = list_datasets(limit, user_id=user["id"])
     for ds in datasets:
         if ds.get('cleaning_pipeline'):
             try:
@@ -265,8 +327,8 @@ def get_datasets_list(limit: int = 50):
 
 
 @app.get("/api/datasets/{dataset_id}")
-def get_dataset_by_id(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def get_dataset_by_id(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -291,8 +353,8 @@ def get_dataset_by_id(dataset_id: str):
 
 
 @app.delete("/api/datasets/{dataset_id}")
-def remove_dataset(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def remove_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
     if os.path.exists(ds['file_path']):
@@ -305,13 +367,13 @@ def remove_dataset(dataset_id: str):
             os.remove(ds['cleaned_file_path'])
         except Exception:
             pass
-    delete_dataset(dataset_id)
+    delete_dataset(dataset_id, user_id=user["id"])
     return {"message": "Dataset deleted successfully", "id": dataset_id}
 
 
 @app.get("/api/datasets/{dataset_id}/preview")
-def preview_dataset(dataset_id: str, page: int = 1, page_size: int = 20, search: str = ""):
-    ds = get_dataset(dataset_id)
+def preview_dataset(dataset_id: str, page: int = 1, page_size: int = 20, search: str = "", user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -352,8 +414,8 @@ def preview_dataset(dataset_id: str, page: int = 1, page_size: int = 20, search:
 
 
 @app.post("/api/datasets/{dataset_id}/cleaning/actions")
-def apply_cleaning_step(dataset_id: str, req: CleaningActionRequest):
-    ds = get_dataset(dataset_id)
+def apply_cleaning_step(dataset_id: str, req: CleaningActionRequest, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
     if ds['status'] == 'finalized':
@@ -415,8 +477,8 @@ def apply_cleaning_step(dataset_id: str, req: CleaningActionRequest):
 
 
 @app.post("/api/datasets/{dataset_id}/cleaning/undo")
-def undo_cleaning_step(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def undo_cleaning_step(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
     if ds['status'] == 'finalized':
@@ -473,8 +535,8 @@ def undo_cleaning_step(dataset_id: str):
 
 
 @app.post("/api/datasets/{dataset_id}/finalize")
-def finalize_dataset(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def finalize_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -483,8 +545,8 @@ def finalize_dataset(dataset_id: str):
 
 
 @app.get("/api/datasets/{dataset_id}/download")
-def download_cleaned_dataset(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def download_cleaned_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -501,8 +563,8 @@ def download_cleaned_dataset(dataset_id: str):
 
 
 @app.get("/api/datasets/{dataset_id}/ai-insights")
-def get_dataset_ai_insights(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def get_dataset_ai_insights(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -519,8 +581,8 @@ def get_dataset_ai_insights(dataset_id: str):
 
 
 @app.get("/api/datasets/{dataset_id}/pdf-report")
-def download_dataset_pdf_report(dataset_id: str):
-    ds = get_dataset(dataset_id)
+def download_dataset_pdf_report(dataset_id: str, user: dict = Depends(get_current_user)):
+    ds = get_dataset(dataset_id, user_id=user["id"])
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -550,8 +612,8 @@ def download_dataset_pdf_report(dataset_id: str):
 # ─── Train ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/train")
-def train_model(req: TrainRequest):
-    job = get_job(req.job_id)
+def train_model(req: TrainRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] == 'running':
@@ -598,8 +660,8 @@ def cluster_meta():
 
 
 @app.post("/api/cluster")
-def cluster_run(req: ClusterRequest):
-    job = get_job(req.job_id)
+def cluster_run(req: ClusterRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if not os.path.exists(job['file_path']):
@@ -634,8 +696,8 @@ def cluster_run(req: ClusterRequest):
 
 
 @app.get("/api/cluster/results/{job_id}")
-def get_cluster_results(job_id: str):
-    job = get_job(job_id)
+def get_cluster_results(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
@@ -653,8 +715,8 @@ def get_cluster_results(job_id: str):
 
 
 @app.post("/api/cluster/export")
-def export_cluster_results(req: ExportRequest):
-    job = get_job(req.job_id)
+def export_cluster_results(req: ExportRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
@@ -716,8 +778,8 @@ def anomaly_meta():
 
 
 @app.post("/api/anomaly")
-def anomaly_run(req: AnomalyRequest):
-    job = get_job(req.job_id)
+def anomaly_run(req: AnomalyRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if not os.path.exists(job['file_path']):
@@ -752,8 +814,8 @@ def anomaly_run(req: AnomalyRequest):
 
 
 @app.get("/api/anomaly/results/{job_id}")
-def get_anomaly_results(job_id: str):
-    job = get_job(job_id)
+def get_anomaly_results(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
@@ -771,8 +833,8 @@ def get_anomaly_results(job_id: str):
 
 
 @app.post("/api/anomaly/export")
-def export_anomaly_results(req: ExportRequest):
-    job = get_job(req.job_id)
+def export_anomaly_results(req: ExportRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
@@ -829,8 +891,8 @@ def export_anomaly_results(req: ExportRequest):
 # ─── Status ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/status/{job_id}")
-def get_status(job_id: str):
-    job = get_job(job_id)
+def get_status(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -888,8 +950,8 @@ def get_status(job_id: str):
 # ─── Results ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/results/{job_id}")
-def get_results(job_id: str):
-    job = get_job(job_id)
+def get_results(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
@@ -931,13 +993,13 @@ def get_results(job_id: str):
 # ─── Jobs List ────────────────────────────────────────────────────────────────
 
 @app.get("/api/jobs")
-def get_jobs(limit: int = 20):
-    return {"jobs": list_jobs(limit)}
+def get_jobs(limit: int = 20, user: dict = Depends(get_current_user)):
+    return {"jobs": list_jobs(limit, user_id=user["id"])}
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job_details(job_id: str):
-    job = get_job(job_id)
+def get_job_details(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -955,8 +1017,8 @@ def get_job_details(job_id: str):
 # ─── Chat / LLM Agent ─────────────────────────────────────────────────────────
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    job = get_job(req.job_id)
+async def chat(req: ChatRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -1007,8 +1069,8 @@ async def chat(req: ChatRequest):
 # ─── Export ───────────────────────────────────────────────────────────────────
 
 @app.post("/api/export")
-def export_model(req: ExportRequest):
-    job = get_job(req.job_id)
+def export_model(req: ExportRequest, user: dict = Depends(get_current_user)):
+    job = get_job(req.job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job['status'] != 'completed':
