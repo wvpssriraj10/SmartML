@@ -117,7 +117,7 @@ export function InspectionStep({ inspection, onStartTraining }) {
                 <div className="text-xs text-muted-foreground">First 10 rows</div>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-hidden">
               <table className="w-full text-xs">
                 <thead className="bg-card/60 text-[10px] uppercase text-muted-foreground">
                   <tr>

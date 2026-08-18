@@ -235,7 +235,7 @@ export function FeatureAnalysisStep({ datasetId }) {
                 Insufficient numerical columns for correlation analysis (need ≥ 2 numeric features).
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-hidden">
                 {/* Column header row */}
                 <div className="flex gap-1 mb-1 pl-[76px]">
                   {corrData.cols.map(c => (

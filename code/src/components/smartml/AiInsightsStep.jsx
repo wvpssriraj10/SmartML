@@ -312,7 +312,7 @@ export function AiInsightsStep({ datasetId }) {
             No statistical anomalies detected in numerical columns.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-hidden">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-muted/60 border-b border-border/60">
                 <tr>

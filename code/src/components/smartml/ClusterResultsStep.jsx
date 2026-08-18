@@ -293,7 +293,7 @@ export function ClusterResultsStep({ results, summary, onNewSession, onDownload,
                 <MoveLeft className="h-3.5 w-3.5 text-violet" /> scroll for more
               </span>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2">
               {(active.profiles && Object.values(active.profiles)).map((p, i) => (
                 <div key={p.cluster} className="glass-panel w-60 shrink-0 rounded-2xl border-t-2 p-4" style={{ borderTopColor: PALETTE[p.cluster % PALETTE.length] }}>
                   <div className="mb-2 flex items-center justify-between">

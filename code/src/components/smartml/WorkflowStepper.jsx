@@ -4,7 +4,7 @@ export function WorkflowStepper({ steps, currentKey }) {
   const currentIdx = steps.findIndex((s) => s.key === currentKey);
 
   return (
-    <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-1">
+    <div className="mb-8 flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1">
       {steps.map((s, i) => {
         const done = i < currentIdx;
         const active = i === currentIdx;
