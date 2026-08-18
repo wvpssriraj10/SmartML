@@ -16,10 +16,11 @@ def compute_classification_metrics(y_true, y_pred, y_prob=None):
     if y_prob is not None:
         try:
             if y_prob.shape[1] == 2:
-                metrics['roc_auc'] = round(roc_auc_score(y_true, y_prob[:, 1]), 4)
+                auc = roc_auc_score(y_true, y_prob[:, 1])
             else:
-                metrics['roc_auc'] = round(roc_auc_score(y_true, y_prob, multi_class='ovr'), 4)
-        except:
+                auc = roc_auc_score(y_true, y_prob, multi_class='ovr')
+            metrics['roc_auc'] = None if (auc is None or auc != auc) else round(auc, 4)
+        except Exception:
             metrics['roc_auc'] = None
     return metrics
 

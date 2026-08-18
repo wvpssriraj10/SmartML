@@ -125,6 +125,7 @@ class Trainer:
             self.data_report['model_selection_strategy'] = 'user_selected'
         else:
             # Limit "all models" mode to top 4 from smart priority to fit 512 MB RAM
+            available = MODEL_REGISTRY.get(self.problem_type, {})
             smart_models = get_smart_models(data_profile)
             limited_keys = list(smart_models.keys())[:4]
             models_dict = {name: available[name] for name in limited_keys if name in available}
