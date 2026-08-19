@@ -1,0 +1,91 @@
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body, #root {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    min-height: 100%;
+  }
+  html.theme-anim, html.theme-anim body, html.theme-anim #root,
+  html.theme-anim .glass-panel, html.theme-anim header, html.theme-anim nav,
+  html.theme-anim button, html.theme-anim input, html.theme-anim textarea,
+  html.theme-anim div, html.theme-anim span, html.theme-anim h1, html.theme-anim h2,
+  html.theme-anim h3, html.theme-anim h4, html.theme-anim p, html.theme-anim td, html.theme-anim th {
+    transition: background-color var(--duration-base) var(--ease-out-expo),
+                color var(--duration-base) var(--ease-out-expo),
+                border-color var(--duration-base) var(--ease-out-expo),
+                box-shadow var(--duration-base) var(--ease-out-expo);
+  }
+  body {
+    position: relative;
+    background-image:
+      radial-gradient(ellipse 900px 600px at 12% -5%, oklch(0.40 0.20 285 / 0.30), transparent 60%),
+      radial-gradient(ellipse 800px 600px at 88% 105%, oklch(0.40 0.20 305 / 0.25), transparent 60%),
+      radial-gradient(ellipse 600px 400px at 50% 50%, oklch(0.30 0.15 210 / 0.10), transparent 70%);
+    background-attachment: fixed;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 40%, black 40%, transparent 100%);
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: -20% -10% auto -10%; height: 60vh; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 40% 50% at 20% 30%, oklch(0.70 0.22 285 / 0.35), transparent 60%),
+      radial-gradient(ellipse 35% 45% at 75% 20%, oklch(0.70 0.22 305 / 0.30), transparent 60%),
+      radial-gradient(ellipse 30% 40% at 50% 60%, oklch(0.75 0.18 210 / 0.20), transparent 60%);
+    filter: blur(60px);
+    animation: aurora 18s ease-in-out infinite alternate;
+  }
+  #root { position: relative; z-index: 1; }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+
+  /* Focus visible for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background var(--duration-fast) var(--ease-expo);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; border: 2px solid transparent; }
+
+/* Selection */
+::selection {
+  background: var(--primary) / 0.3;
+  color: var(--foreground);
+}
+
+/* Print */
+@media print {
+  @page { margin: 0; }
+  body { background: none; }
+  .no-print { display: none !important; }
+}

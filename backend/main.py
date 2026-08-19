@@ -44,9 +44,10 @@ from ml_engine.preprocessing import DatasetInspector
 from ml_engine.cleaning import apply_cleaning_action, calculate_dataset_metrics
 from ml_engine.ai_insights import generate_executive_insights, generate_pdf_report
 from .database import (
-    init_db, create_job, update_job, get_job, list_jobs,
+    init_db, create_job, update_job, get_job, get_job_status, list_jobs,
     create_dataset, update_dataset, get_dataset, list_datasets, delete_dataset,
     create_user, get_user_by_email, get_user_by_id,
+    request_cancel, append_job_log,
 )
 from .auth import hash_password, verify_password, create_token, verify_token
 from .schemas import TrainRequest, UploadResponse, StatusResponse, ChatRequest, ChatResponse, ExportRequest, CleaningActionRequest, ClusterRequest, AnomalyRequest
@@ -890,9 +891,23 @@ def export_anomaly_results(req: ExportRequest, user: dict = Depends(get_current_
 
 # ─── Status ───────────────────────────────────────────────────────────────────
 
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
+    job = get_job(job_id, user_id=user["id"])
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job['status'] in ('completed', 'cancelled', 'failed'):
+        return {"job_id": job_id, "status": job['status'], "message": "Nothing to cancel."}
+
+    request_cancel(job_id)
+    update_job(job_id, status='cancelled', error='Cancelled by user.')
+    append_job_log(job_id, 'Cancellation requested. Stopping after the current step.', 'warning')
+    return {"job_id": job_id, "status": "cancelled", "message": "Cancellation requested. The worker will stop after the current step."}
+
+
 @app.get("/api/status/{job_id}")
 def get_status(job_id: str, user: dict = Depends(get_current_user)):
-    job = get_job(job_id, user_id=user["id"])
+    job = get_job_status(job_id, user_id=user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 

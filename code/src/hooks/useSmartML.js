@@ -11,6 +11,19 @@ import {
 } from "@/lib/smartml-constants";
 import { mapInspection, mapResults } from "@/lib/smartml-mappers";
 
+const STALL_AFTER_MS = 90 * 1000;
+const FETCH_TIMEOUT_MS = 15 * 1000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function buildModelStates(modelNames, logs, progressData) {
   const nextStates = modelNames.map((name) => ({ name, status: "queued", progress: 0 }));
 
@@ -84,6 +97,8 @@ export function useSmartML() {
   const [trainingLogs, setTrainingLogs] = useState([]);
   const [modelStates, setModelStates] = useState([]);
   const [trainingElapsed, setTrainingElapsed] = useState(0);
+  const [trainingStalled, setTrainingStalled] = useState(false);
+  const [trainingError, setTrainingError] = useState(null);
   const [recentJobs, setRecentJobs] = useState([]);
 
   const [clusterCfg, setClusterCfg] = useState(null);
@@ -113,6 +128,9 @@ export function useSmartML() {
   const timerRef = useRef(null);
   const pollRef = useRef(null);
   const stallWarnedRef = useRef(false);
+  const lastActivityRef = useRef(Date.now());
+  const lastProgressRef = useRef(0);
+  const lastLogCountRef = useRef(0);
 
   useEffect(() => {
     const check = async () => {
@@ -161,6 +179,8 @@ export function useSmartML() {
     setTrainingLogs([]);
     setModelStates([]);
     setTrainingElapsed(0);
+    setTrainingStalled(false);
+    setTrainingError(null);
     setClusterCfg(null);
     setClusterResults(null);
     setClusterLogs([]);
@@ -264,6 +284,11 @@ export function useSmartML() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (pollRef.current) window.clearInterval(pollRef.current);
     stallWarnedRef.current = false;
+    lastActivityRef.current = Date.now();
+    lastProgressRef.current = 0;
+    lastLogCountRef.current = 0;
+    setTrainingStalled(false);
+    setTrainingError(null);
 
     timerRef.current = window.setInterval(() => {
       setTrainingElapsed((v) => v + 1);
@@ -271,7 +296,7 @@ export function useSmartML() {
 
     const poll = async () => {
       try {
-        const r = await fetch(`${API_BASE}/status/${activeJobId}`);
+        const r = await fetchWithTimeout(`${API_BASE}/status/${activeJobId}`);
         if (!r.ok) {
           const text = await r.text().catch(() => "");
           throw new Error(`Status check failed (${r.status}): ${text.slice(0, 200)}`);
@@ -283,8 +308,23 @@ export function useSmartML() {
           throw new Error("Backend returned invalid JSON (may be restarting)");
         }
         if (!data) throw new Error("Backend returned empty response");
+
+        // Progress-backed stall detection: if percent or logs haven't changed
+        // in STALL_AFTER_MS while a job is still queued/running, flag it.
+        const percent = data.progress?.percent ?? 0;
+        const logCount = (data.logs || []).length;
+        if (percent !== lastProgressRef.current || logCount !== lastLogCountRef.current) {
+          lastActivityRef.current = Date.now();
+          lastProgressRef.current = percent;
+          lastLogCountRef.current = logCount;
+        } else if (Date.now() - lastActivityRef.current > STALL_AFTER_MS && !stallWarnedRef.current) {
+          stallWarnedRef.current = true;
+          setTrainingStalled(true);
+          pushAssistant("Training progress has stalled — no new updates for over a minute. The worker may have hit a memory limit or hung. You can cancel and retry.");
+        }
+
         setTrainingStatus(data.status || "running");
-        setTrainingProgress(data.progress?.percent ?? 0);
+        setTrainingProgress(percent);
         setTrainingLogs(data.logs || []);
 
         const nextStates = buildModelStates(MODEL_NAMES, data.logs, data.progress);
@@ -301,27 +341,36 @@ export function useSmartML() {
           window.clearInterval(timerRef.current);
           await loadResults(activeJobId);
         }
+        if (data.status === "cancelled") {
+          window.clearInterval(pollRef.current);
+          window.clearInterval(timerRef.current);
+          setTrainingStatus("cancelled");
+          setTrainingError(data.message || "Training cancelled.");
+          pushAssistant(data.message || "Training was cancelled.");
+        }
         if (data.status === "failed") {
           window.clearInterval(pollRef.current);
           window.clearInterval(timerRef.current);
-          pushAssistant(`Training failed: ${data.message || "Unknown error"}`);
-        }
-
-        if ((data.status === "running" || data.status === "queued") && completedCount === 0) {
-          const noLogs = !data.logs || data.logs.length === 0;
-          if (trainingElapsed > 90 && !stallWarnedRef.current && (noLogs || data.progress?.percent === 0)) {
-            stallWarnedRef.current = true;
-            pushAssistant("Still waiting for the first model to report back — on the free tier the backend may be spinning up or the worker may have hit a memory limit. If this persists past a few minutes, restart training.");
-          }
+          setTrainingStatus("failed");
+          setTrainingError(data.message || "Training failed — unknown error.");
+          pushAssistant(`Training failed: ${data.message || "Unknown error"}. You can retry from the training screen.`);
         }
       } catch (err) {
-        pushAssistant(`Status check error: ${err.message}`);
+        if (Date.now() - lastActivityRef.current > STALL_AFTER_MS) {
+          if (!stallWarnedRef.current) {
+            stallWarnedRef.current = true;
+            setTrainingStalled(true);
+            pushAssistant("Training progress has stalled — the worker is not responding to status checks. You can cancel and retry.");
+          }
+        } else {
+          pushAssistant(`Status check error: ${err.message}`);
+        }
       }
     };
 
     poll();
     pollRef.current = window.setInterval(poll, 2000);
-  }, [pushAssistant, trainingElapsed, trainingProgress]);
+  }, [pushAssistant, trainingProgress]);
 
   const handleStartTraining = useCallback(async (cfg) => {
     if (!jobId) return;
@@ -331,11 +380,13 @@ export function useSmartML() {
     setTrainingStatus("queued");
     setTrainingProgress(0);
     setTrainingLogs([]);
+    setTrainingStalled(false);
+    setTrainingError(null);
     setModelStates(MODEL_NAMES.map((name) => ({ name, status: "queued", progress: 0 })));
     pushAssistant(`Training ${MODEL_NAMES.length} models to predict "${cfg.target}" (free-tier limit) — I'll narrate progress and highlight the champion when it emerges.`);
 
     try {
-      const r = await fetch(`${API_BASE}/train`, {
+      const r = await fetchWithTimeout(`${API_BASE}/train`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -353,6 +404,29 @@ export function useSmartML() {
       setStep("inspection");
     }
   }, [jobId, pushAssistant, startPollingTraining]);
+
+  const handleRetryTraining = useCallback(async () => {
+    if (!trainCfg) return;
+    pushAssistant("Retrying training with the same configuration…");
+    await handleStartTraining(trainCfg);
+  }, [handleStartTraining, pushAssistant, trainCfg]);
+
+  const handleCancelTraining = useCallback(async () => {
+    if (!jobId) return;
+    setTrainingStalled(false);
+    pushAssistant("Cancelling training — the worker will stop after the current step.");
+    try {
+      const r = await fetchWithTimeout(`${API_BASE}/jobs/${jobId}/cancel`, { method: "POST" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "Cancel failed");
+      setTrainingStatus("cancelled");
+      setTrainingError(data.message || "Training cancelled.");
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    } catch (err) {
+      pushAssistant(`Could not cancel training: ${err.message}`);
+    }
+  }, [jobId, pushAssistant]);
 
   const handleResultsDone = useCallback(() => setStep("visualization"), []);
 
@@ -714,6 +788,8 @@ export function useSmartML() {
     trainingLogs,
     modelStates,
     trainingElapsed,
+    trainingStalled,
+    trainingError,
     recentJobs,
     clusterCfg,
     clusterResults,
@@ -736,6 +812,8 @@ export function useSmartML() {
     onAnalyzed: handleAnalyzed,
     onCleaningDone: handleCleaningDone,
     onStartTraining: handleStartTraining,
+    onRetryTraining: handleRetryTraining,
+    onCancelTraining: handleCancelTraining,
     onResultsDone: handleResultsDone,
     onVisualizationDone: handleVisualizationDone,
     onNewSession: handleNewSession,

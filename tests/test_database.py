@@ -92,3 +92,17 @@ class TestJobs:
             fresh_db.append_job_log("j1", f"msg {i}", "info")
         row = fresh_db.get_job("j1")
         assert len(json.loads(row["logs"])) == 100
+
+
+class TestCancellation:
+    def test_cancel_defaults_to_zero(self, fresh_db):
+        fresh_db.create_job("j1", "/tmp/iris.csv", "iris.csv")
+        assert fresh_db.is_cancelled("j1") is False
+
+    def test_request_cancel_sets_flag(self, fresh_db):
+        fresh_db.create_job("j1", "/tmp/iris.csv", "iris.csv")
+        fresh_db.request_cancel("j1")
+        assert fresh_db.is_cancelled("j1") is True
+
+    def test_is_cancelled_missing_job(self, fresh_db):
+        assert fresh_db.is_cancelled("nope") is False

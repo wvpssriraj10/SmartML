@@ -40,6 +40,8 @@ export function SmartMLWorkflow({
   trainingLogs,
   modelStates,
   trainingElapsed,
+  trainingStalled,
+  trainingError,
   recentJobs,
   clusterCfg,
   clusterResults,
@@ -60,6 +62,8 @@ export function SmartMLWorkflow({
   onAnalyzed,
   onCleaningDone,
   onStartTraining,
+  onRetryTraining,
+  onCancelTraining,
   onResultsDone,
   onVisualizationDone,
   onNewSession,
@@ -98,6 +102,10 @@ export function SmartMLWorkflow({
             elapsed={trainingElapsed}
             logs={trainingLogs}
             models={modelStates}
+            stalled={trainingStalled}
+            error={trainingError}
+            onRetry={onRetryTraining}
+            onCancel={onCancelTraining}
           />
         )}
         {step === "cluster-config" && inspection && (

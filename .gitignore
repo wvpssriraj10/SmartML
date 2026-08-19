@@ -50,3 +50,6 @@ playwright-report/
 # local database & build cache
 smartml.db
 *.tsbuildinfo
+# Local auth secret
+.secret.key
+

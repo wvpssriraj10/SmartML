@@ -85,6 +85,7 @@ def init_db():
             error TEXT,
             cluster_results TEXT,
             anomaly_results TEXT,
+            cancel_requested INTEGER DEFAULT 0,
             created_at TEXT,
             updated_at TEXT
         )
@@ -106,6 +107,7 @@ def init_db():
             ("logs",               "ADD COLUMN IF NOT EXISTS logs TEXT"),
             ("cluster_results",    "ADD COLUMN IF NOT EXISTS cluster_results TEXT"),
             ("anomaly_results",    "ADD COLUMN IF NOT EXISTS anomaly_results TEXT"),
+            ("cancel_requested",   "ADD COLUMN IF NOT EXISTS cancel_requested INTEGER DEFAULT 0"),
         ]
         for col, suffix in migrations:
             if col not in existing:
@@ -127,6 +129,7 @@ def init_db():
             ("logs",               "ALTER TABLE jobs ADD COLUMN logs TEXT"),
             ("cluster_results",    "ALTER TABLE jobs ADD COLUMN cluster_results TEXT"),
             ("anomaly_results",    "ALTER TABLE jobs ADD COLUMN anomaly_results TEXT"),
+            ("cancel_requested",   "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER DEFAULT 0"),
         ]
         for col, sql in migrations:
             if col not in existing:
@@ -229,6 +232,25 @@ def get_job(job_id, user_id=None):
     return None
 
 
+def get_job_status(job_id, user_id=None):
+    """Lightweight status row for high-frequency polling. Omits the large
+    inspection/data_report blobs to keep remote (Postgres) round-trips fast."""
+    conn = get_connection()
+    cols = ('id, status, original_filename, target_column, problem_type, '
+            'cluster_results, anomaly_results, progress, logs, error, '
+            'results, created_at, updated_at')
+    try:
+        if user_id:
+            row = conn.execute(_translate(f'SELECT {cols} FROM jobs WHERE id = ? AND user_id = ?'),
+                               (job_id, user_id)).fetchone()
+        else:
+            row = conn.execute(_translate(f'SELECT {cols} FROM jobs WHERE id = ?'),
+                               (job_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def list_jobs(limit=20, user_id=None):
     conn = get_connection()
     if user_id:
@@ -259,6 +281,22 @@ def append_job_log(job_id, message, level='info', progress=None):
     conn.execute(_translate(sql + ' WHERE id = ?'), values)
     conn.commit()
     conn.close()
+
+
+def request_cancel(job_id):
+    """Set a cooperative cancel flag; the worker checks it between models."""
+    conn = get_connection()
+    conn.execute(_translate('UPDATE jobs SET cancel_requested = 1, updated_at = ? WHERE id = ?'),
+                 (datetime.now().isoformat(), job_id))
+    conn.commit()
+    conn.close()
+
+
+def is_cancelled(job_id):
+    conn = get_connection()
+    row = conn.execute(_translate('SELECT cancel_requested FROM jobs WHERE id = ?'), (job_id,)).fetchone()
+    conn.close()
+    return bool(row and row['cancel_requested'])
 
 
 # ─── Users ─────────────────────────────────────────────────────────────────────

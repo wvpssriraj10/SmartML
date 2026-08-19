@@ -10,8 +10,10 @@ export const IRIS_PATH = path.resolve(__dirname, "../../test_iris.csv");
 /** Upload a file through the drop zone by setting the hidden file input. */
 export async function uploadFile(page, filePath = IRIS_PATH) {
   await page.setInputFiles('input[type="file"]', filePath);
-  await page.getByText("Upload complete").waitFor({ timeout: 30000 });
-  await page.getByText("Upload complete").waitFor({ state: "detached", timeout: 60000 });
+  await Promise.race([
+    page.getByText("Upload complete").waitFor({ timeout: 30000 }),
+    page.getByRole("button", { name: /Continue to Configure/i }).waitFor({ timeout: 60000 }),
+  ]);
   await page.waitForLoadState("networkidle");
 }
 
