@@ -5,8 +5,8 @@ import { clearActiveDataset, setActiveDataset } from "@/lib/active-dataset";
 import { ML_MODES } from "@/lib/ml-modes";
 import {
   KNOWN_MODEL,
-  MODEL_NAMES,
   STEPS_FOR,
+  discoverModelNames,
   makeId,
 } from "@/lib/smartml-constants";
 import { mapInspection, mapResults } from "@/lib/smartml-mappers";
@@ -24,12 +24,13 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
-function buildModelStates(modelNames, logs, progressData) {
+function buildModelStates(logs, progressData) {
+  const modelNames = discoverModelNames(logs, progressData?.current_model);
   const nextStates = modelNames.map((name) => ({ name, status: "queued", progress: 0 }));
 
   (logs || []).forEach((entry) => {
     const raw = entry?.message || "";
-    const m = raw.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
+    const m = raw.match(/^(?:Training |.+? training )?([\w .]+?)(?:…|\.{3}| completed\.| failed:.*|\.)?$/i);
     const model = m && m[1] && KNOWN_MODEL.has(m[1].trim()) ? m[1].trim() : null;
     if (!model) return;
     const idx = nextStates.findIndex((s) => s.name.toLowerCase() === model.toLowerCase());
@@ -327,7 +328,7 @@ export function useSmartML() {
         setTrainingProgress(percent);
         setTrainingLogs(data.logs || []);
 
-        const nextStates = buildModelStates(MODEL_NAMES, data.logs, data.progress);
+        const nextStates = buildModelStates(data.logs, data.progress);
         const completedCount = nextStates.filter((m) => m.status === "completed" || m.status === "failed").length;
         const evenlyDistributedProgress = completedCount > 0 ? Math.round((completedCount / nextStates.length) * 100) : trainingProgress;
         setModelStates(nextStates.map((m) => {
@@ -382,8 +383,8 @@ export function useSmartML() {
     setTrainingLogs([]);
     setTrainingStalled(false);
     setTrainingError(null);
-    setModelStates(MODEL_NAMES.map((name) => ({ name, status: "queued", progress: 0 })));
-    pushAssistant(`Training ${MODEL_NAMES.length} models to predict "${cfg.target}" (free-tier limit) — I'll narrate progress and highlight the champion when it emerges.`);
+    setModelStates([]);
+    pushAssistant(`Training the model lineup to predict "${cfg.target}" (free-tier limit) — I'll narrate progress and highlight the champion when it emerges.`);
 
     try {
       const r = await fetchWithTimeout(`${API_BASE}/train`, {

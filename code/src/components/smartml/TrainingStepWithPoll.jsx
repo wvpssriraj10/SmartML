@@ -1,19 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { TrainingStep } from "@/components/smartml/TrainingStep";
 import { API_BASE } from "@/api";
-
-// Must match MODEL_NAMES in index.jsx (free-tier cap: 4 models)
-const MODEL_LIST = [
-  "Logistic Regression",
-  "Decision Tree",
-  "Random Forest",
-  "Naive Bayes",
-];
+import { discoverModelNames } from "@/lib/smartml-constants";
 
 function parseModelName(message) {
   if (!message) return null;
   // Logs look like: "Training XGBoost…", "Random Forest completed.", "Decision Tree failed: …"
-  const m = message.match(/^(?:Training |.+? training )?([\w .]+?)(\.{3}| completed\.| failed:.*|\.)?$/i);
+  const m = message.match(/^(?:Training |.+? training )?([\w .]+?)(?:…|\.{3}| completed\.| failed:.*|\.)?$/i);
   return m && m[1] ? m[1].trim() : null;
 }
 
@@ -52,8 +45,9 @@ export function TrainingStepWithPoll({ datasetId }) {
     lastActivityRef.current = Date.now();
     lastProgressRef.current = 0;
     lastLogCountRef.current = 0;
-    // Initialize with fixed 4-model roster
-    setModels(MODEL_LIST.map((name) => ({ name, status: "queued", progress: 0 })));
+    // Roster is discovered live from the worker logs so it matches the
+    // backend's smart-selection roster exactly.
+    setModels([]);
 
     const elapsedTimer = window.setInterval(() => {
       if (!doneRef.current) {
@@ -84,9 +78,16 @@ export function TrainingStepWithPoll({ datasetId }) {
         if (data.target_column) setTarget(data.target_column);
         if (data.problem_type) setProblemType(data.problem_type);
 
-        // Update status for models in our fixed roster only
+        // Discover the actual roster from live logs + current model, then
+        // update statuses for everything in it.
         setModels((prev) => {
           const next = prev.map((m) => ({ ...m }));
+          const roster = discoverModelNames(data.logs, data.progress?.current_model);
+          for (const name of roster) {
+            if (!next.some((m) => modelKey(m.name) === modelKey(name))) {
+              next.push({ name, status: "queued", progress: 0 });
+            }
+          }
           const idxOf = (name) => {
             const key = modelKey(name);
             return next.findIndex((m) => modelKey(m.name) === key);
@@ -100,9 +101,6 @@ export function TrainingStepWithPoll({ datasetId }) {
             const raw = entry?.message || "";
             const name = parseModelName(raw);
             if (!name) return;
-            // Only update if model is in our roster
-            const idx = idxOf(name);
-            if (idx === -1) return;
             if (/ completed\./.test(raw)) apply(name, (m) => ({ ...m, status: "completed", progress: 100 }));
             else if (/ failed:/.test(raw)) apply(name, (m) => ({ ...m, status: "failed", progress: 100 }));
             else if (/^Training/.test(raw)) apply(name, (m) => ({ ...m, status: "training", progress: Math.max(m.progress, 30) }));

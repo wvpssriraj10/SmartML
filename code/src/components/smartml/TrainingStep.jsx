@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Clock, Terminal, AlertCircle, CheckCircle2, Loader2, XCircle, RotateCcw, Ban } from "lucide-react";
 
-const MODEL_NAMES = [
-  "Logistic Regression",
-  "Decision Tree",
-  "Random Forest",
-  "XGBoost",
-];
-
 function statusIcon(s) {
   switch (s) {
     case "queued": return <div className="h-2 w-2 rounded-full bg-muted-foreground/50" />;
@@ -105,7 +98,11 @@ export function TrainingStep({
             <div className="text-xs uppercase tracking-wider text-muted-foreground">
               {isDone ? "Training complete" : isFailed ? "Training failed" : isCancelled ? "Training cancelled" : "Training in progress"}
             </div>
-            <h2 className="mt-1 text-2xl font-bold">{MODEL_NAMES.length} models · racing to the top (free-tier limit)</h2>
+            <h2 className="mt-1 text-2xl font-bold">
+              {models?.length
+                ? `${models.length} ${models.length === 1 ? "model" : "models"} · racing to the top (free-tier limit)`
+                : "Preparing the model lineup…"}
+            </h2>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
