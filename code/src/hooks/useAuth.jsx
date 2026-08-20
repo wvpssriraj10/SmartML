@@ -32,10 +32,15 @@ export function AuthProvider({ children }) {
           const u = JSON.parse(saved);
           if (!cancelled) setUser(u);
         }
-        const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) persistUser(data.user);
+        let res;
+        try {
+          res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+        } catch {
+          res = null;
+        }
+        if (res && res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled && data.user) persistUser(data.user);
         } else {
           clearAuthToken();
           if (!cancelled) setUser(null);
@@ -50,34 +55,50 @@ export function AuthProvider({ children }) {
     return () => { cancelled = true; };
   }, [persistUser]);
 
+  // POST form data and safely parse the JSON response so a missing/invalid
+  // body can never surface as an opaque TypeError (e.g. "reading 'json'").
+  const postForm = useCallback(async (url, body) => {
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+    } catch {
+      throw new Error("Could not reach the server. Please try again.");
+    }
+    let data = {};
+    try {
+      if (res) data = await res.json();
+    } catch {
+      data = {};
+    }
+    return { res, data };
+  }, []);
+
   const login = useCallback(async (email, password) => {
-    const body = new URLSearchParams({ email, password });
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "Login failed");
+    const { res, data } = await postForm(
+      `${API_BASE}/auth/login`,
+      new URLSearchParams({ email, password })
+    );
+    if (!res || !res.ok) throw new Error(data.detail || "Login failed");
+    if (!data.token || !data.user) throw new Error("Unexpected response from server.");
     setAuthToken(data.token);
     persistUser(data.user);
     return data.user;
-  }, [persistUser]);
+  }, [postForm, persistUser]);
 
   const register = useCallback(async (email, password, displayName) => {
     const body = new URLSearchParams({ email, password });
     if (displayName) body.append("display_name", displayName);
-    const res = await fetch(`${API_BASE}/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || "Registration failed");
+    const { res, data } = await postForm(`${API_BASE}/auth/register`, body);
+    if (!res || !res.ok) throw new Error(data.detail || "Registration failed");
+    if (!data.token || !data.user) throw new Error("Unexpected response from server.");
     setAuthToken(data.token);
     persistUser(data.user);
     return data.user;
-  }, [persistUser]);
+  }, [postForm, persistUser]);
 
   const logout = useCallback(() => {
     clearAuthToken();
