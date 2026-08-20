@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   UploadCloud, FileSpreadsheet, CheckCircle2, Clock, Trash2, SlidersHorizontal,
   Eye, BarChart3, Database, Loader2, AlertCircle
 } from "lucide-react";
 
 import { API_BASE } from "@/api";
+import { playCrumpleToss } from "@/lib/crumple-delete";
 
 const ACCEPTED = [".csv", ".xlsx", ".xls", ".json"];
 
@@ -16,8 +18,16 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
   const [progress, setProgress]   = useState(0);
   const [error, setError]         = useState(null);
   const [successFile, setSuccessFile] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [binActive, setBinActive]   = useState(false);
+  const [toastMsg, setToastMsg]     = useState(null);
   const inputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const libRef = useRef(null);
+  const binRef = useRef(null);
+  const ballRef = useRef(null);
+  const commitTimer = useRef(null);
+  const pendingRef = useRef(null);
 
   const isPointerOverZone = (x, y) => {
     const zone = dropZoneRef.current;
@@ -182,19 +192,62 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
     if (f) uploadFile(f);
   };
 
-  const handleDelete = async (datasetId) => {
-    if (!confirm("Delete this dataset and all its cleaning history?")) return;
+  const commitDelete = async (ds) => {
+    setToastMsg(null);
+    setDeletingId(null);
+    setBinActive(false);
+    pendingRef.current = null;
     try {
-      await fetch(`${API_BASE}/datasets/${datasetId}`, { method: "DELETE" });
-      setDatasets(prev => prev.filter(d => d.id !== datasetId));
+      await fetch(`${API_BASE}/datasets/${ds.id}`, { method: "DELETE" });
     } catch { /* ignore */ }
+    setDatasets(prev => prev.filter(d => d.id !== ds.id));
   };
+
+  const cancelDelete = (ds) => {
+    clearTimeout(commitTimer.current);
+    const rowEl = libRef.current?.querySelector(`[data-ds-id="${ds.id}"]`);
+    rowEl?.classList.remove("dl-selecting", "dl-gone");
+    setToastMsg(null);
+    setDeletingId(null);
+    setBinActive(false);
+    pendingRef.current = null;
+  };
+
+  const undoDelete = () => {
+    if (pendingRef.current) cancelDelete(pendingRef.current);
+  };
+
+  const handleDelete = async (ds) => {
+    if (deletingId) return;
+    const rowEl = libRef.current?.querySelector(`[data-ds-id="${ds.id}"]`);
+    if (!rowEl) {
+      // Fallback when there's nothing to animate.
+      if (!confirm("Delete this dataset and all its cleaning history?")) return;
+      try {
+        await fetch(`${API_BASE}/datasets/${ds.id}`, { method: "DELETE" });
+      } catch { /* ignore */ }
+      setDatasets(prev => prev.filter(d => d.id !== ds.id));
+      return;
+    }
+    setDeletingId(ds.id);
+    setBinActive(true);
+    pendingRef.current = ds;
+    try {
+      await playCrumpleToss(rowEl, binRef.current, ballRef.current);
+      setToastMsg(`Deleted "${ds.name}"`);
+      commitTimer.current = setTimeout(() => commitDelete(ds), 3000);
+    } catch {
+      cancelDelete(ds);
+    }
+  };
+
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
 
   const inProgress  = datasets.filter(d => d.status !== "finalized");
   const finalized   = datasets.filter(d => d.status === "finalized");
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-8 animate-fade-in-up" ref={libRef}>
 
       {/* ── Drop Zone ─────────────────────────────────────────────────────── */}
       {!libraryOnly && (
@@ -322,7 +375,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                   In Progress ({inProgress.length})
                 </h3>
                 {inProgress.map(ds => (
-                  <div key={ds.id} className="glass-panel rounded-xl border border-border/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-primary/30 transition">
+                  <div key={ds.id} data-ds-id={ds.id} className="glass-panel rounded-xl border border-border/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-primary/30 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="h-9 w-9 rounded-xl bg-amber/10 border border-amber/20 flex items-center justify-center shrink-0">
                         <FileSpreadsheet className="h-4 w-4 text-amber" />
@@ -347,7 +400,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium hover:bg-accent transition">
                         <Eye className="h-3.5 w-3.5" /> Preview
                       </button>
-                      <button onClick={() => handleDelete(ds.id)}
+                      <button onClick={() => handleDelete(ds)}
                         className="p-1.5 rounded-lg border border-border/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -365,7 +418,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                   Finalized ({finalized.length})
                 </h3>
                 {finalized.map(ds => (
-                  <div key={ds.id} className="glass-panel rounded-xl border border-emerald/20 bg-emerald/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div key={ds.id} data-ds-id={ds.id} className="glass-panel rounded-xl border border-emerald/20 bg-emerald/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="h-9 w-9 rounded-xl bg-emerald/10 border border-emerald/30 flex items-center justify-center shrink-0">
                         <CheckCircle2 className="h-4 w-4 text-emerald" />
@@ -389,7 +442,7 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/60 px-3 py-1.5 text-xs font-medium hover:bg-accent transition">
                         <SlidersHorizontal className="h-3.5 w-3.5" /> Cleaning
                       </button>
-                      <button onClick={() => handleDelete(ds.id)}
+                      <button onClick={() => handleDelete(ds)}
                         className="p-1.5 rounded-lg border border-border/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -401,6 +454,23 @@ export function UploadLibraryStep({ onUploadSuccess, onSelectDataset, onNavigate
           </div>
         )}
       </div>
+
+      {/* ── Crumple & Toss delete overlay ─────────────────────────────────── */}
+      {createPortal(
+        <>
+          <div ref={binRef} className={`dl-bin ${binActive ? "active" : ""}`} aria-hidden="true">
+            <Trash2 className="h-5 w-5" />
+          </div>
+          <div ref={ballRef} className="dl-ball" aria-hidden="true" />
+          {toastMsg && (
+            <div className="dl-toast show" role="status">
+              <span className="max-w-[260px] truncate text-sm text-foreground">{toastMsg}</span>
+              <button type="button" className="dl-undo-btn" onClick={undoDelete}>UNDO</button>
+            </div>
+          )}
+        </>,
+        document.body
+      )}
     </div>
   );
 }

@@ -89,3 +89,123 @@
   body { background: none; }
   .no-print { display: none !important; }
 }
+
+/* -- Crumple & Toss satisfying delete --------------------------- */
+/* select: whole row glows red/pink and scales up 1.02x */
+.dl-selecting {
+  transform: scale(1.02) !important;
+  background: rgba(244, 63, 94, 0.10) !important;
+  border-color: rgba(248, 113, 113, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.30), 0 0 28px rgba(244, 63, 94, 0.40) !important;
+  transition: transform 0.22s var(--ease-out-expo), box-shadow 0.22s var(--ease-out-expo),
+              border-color 0.22s var(--ease-out-expo), background 0.22s var(--ease-out-expo) !important;
+}
+
+/* gone: item fades out + collapses */
+.dl-gone {
+  opacity: 0 !important;
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* crumpled paper ball */
+.dl-ball {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #f5f2ea 0%, #dcd5c4 34%, #a99f8c 78%, #8a8070 100%);
+  box-shadow: inset -4px -5px 8px rgba(0, 0, 0, 0.35), inset 3px 3px 6px rgba(255, 255, 255, 0.5),
+              0 6px 14px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+.dl-ball.dl-crumpling { animation: dl-crumple 0.3s var(--ease-out-expo) forwards; }
+
+/* bin — bottom right of the viewport, left of the chat FAB */
+.dl-bin {
+  position: fixed;
+  right: 96px;
+  bottom: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #8a90ad;
+  display: grid;
+  place-items: center;
+  z-index: 79;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.3s var(--ease-out-expo), transform 0.3s var(--ease-out-expo);
+  pointer-events: none;
+}
+.dl-bin.active { opacity: 1; transform: scale(1); }
+.dl-bin.dl-squash { animation: dl-bin-squash 0.5s var(--ease-out-expo); }
+
+/* dust poof particles */
+.dl-particle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(226, 232, 240, 0.85);
+  pointer-events: none;
+  z-index: 81;
+  animation: dl-poof 0.55s var(--ease-out-expo) forwards;
+}
+.dl-particle.p2 { background: rgba(168, 85, 247, 0.7); }
+.dl-particle.p3 { background: rgba(148, 163, 184, 0.8); }
+
+/* undo toast */
+.dl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 80px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 18px;
+  border-radius: 999px;
+  background: rgba(15, 18, 38, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 14px 40px -10px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  z-index: 90;
+  transition: transform 0.4s var(--ease-out-expo), opacity 0.3s var(--ease-out-expo);
+  pointer-events: none;
+}
+.dl-toast.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+
+.dl-undo-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: linear-gradient(92deg, var(--color-primary), var(--color-primary-foreground));
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.45);
+  transition: transform 0.18s var(--ease-out-expo), box-shadow 0.18s var(--ease-out-expo);
+}
+.dl-undo-btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6); }
+.dl-undo-btn:active { transform: scale(0.96); }
