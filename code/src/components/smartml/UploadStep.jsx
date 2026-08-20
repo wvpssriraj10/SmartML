@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { UploadCloud, FileSpreadsheet, FileJson, FileText, CheckCircle2, Clock3, Database } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, FileJson, CheckCircle2, Clock3, Database } from "lucide-react";
 
 const ACCEPTED = [".csv", ".xlsx", ".xls", ".json"];
 
@@ -176,11 +176,6 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <FileText className="h-3.5 w-3.5" />
-        No dataset? Try our <button className="text-primary underline underline-offset-2 hover:text-violet">Sample churn dataset</button>
       </div>
 
       {recentJobs.length > 0 && (
