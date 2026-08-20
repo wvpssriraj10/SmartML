@@ -3,7 +3,6 @@ import { Outlet, createRootRoute, useRouter, useSearch } from "@tanstack/react-r
 import { useEffect } from "react";
 
 import { Navbar } from "@/components/smartml/Navbar";
-import { LoginScreen } from "@/components/auth/LoginScreen";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import appCss from "../styles.css?url";
 
@@ -83,7 +82,7 @@ export const Route = createRootRoute({
 });
 
 function AppShell() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, reconnect } = useAuth();
 
   if (loading) {
     return (
@@ -94,7 +93,19 @@ function AppShell() {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen />;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Connecting to SmartML…</p>
+          <button
+            onClick={reconnect}
+            className="mt-4 inline-flex items-center justify-center rounded-lg btn-gradient px-4 py-2 text-sm font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
