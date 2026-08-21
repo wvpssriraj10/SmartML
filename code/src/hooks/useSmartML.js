@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { API_BASE } from "@/api";
+import { API_BASE, apiFetch } from "@/api";
 import { clearActiveDataset, setActiveDataset } from "@/lib/active-dataset";
 import { ML_MODES } from "@/lib/ml-modes";
 import {
@@ -238,7 +238,7 @@ export function useSmartML() {
     try {
       const fd = new FormData();
       fd.append("file", f);
-      const r = await fetch(`${API_BASE}/upload`, { method: "POST", body: fd });
+      const r = await apiFetch(`${API_BASE}/upload`, { method: "POST", body: fd });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || "Upload failed");
       const mapped = mapInspection(data.inspection, f.name);
