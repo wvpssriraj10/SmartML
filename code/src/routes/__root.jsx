@@ -33,13 +33,19 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {}, [error]);
+
+  const message = error?.message || String(error || "Unknown error");
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center glass-panel rounded-2xl p-10">
         <h1 className="text-xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">Try refreshing or head back home.</p>
+        {message && (
+          <p className="mt-3 break-words rounded-lg border border-rose/30 bg-rose/10 px-3 py-2 font-mono text-xs text-rose">
+            {message}
+          </p>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => { router.invalidate(); reset(); }}

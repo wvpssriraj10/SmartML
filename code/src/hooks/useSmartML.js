@@ -81,9 +81,11 @@ function buildAlgoStates(algoNames, logs, progressData, phase = "running") {
 }
 
 export function useSmartML() {
-  const [mode, setMode] = useState(
-    () => localStorage.getItem("smartml_mode") || "predict",
-  );
+  // Sanitize a possibly-stale mode value (from an older bundle) back to predict.
+  const [mode, setMode] = useState(() => {
+    const saved = localStorage.getItem("smartml_mode");
+    return saved && saved in ML_MODES ? saved : "predict";
+  });
   const [step, setStep] = useState("mode");
   const [connected, setConnected] = useState(false);
   const [file, setFile] = useState(null);
