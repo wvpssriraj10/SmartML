@@ -97,7 +97,7 @@ export function UploadStep({ onUploaded, onResumeJob, recentJobs = [] }) {
           <span className="text-gradient">under 60 seconds.</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-          Drop a dataset. SmartML inspects it, trains <span className="text-foreground font-semibold">10 algorithms</span> in parallel, and hands back deployable code.
+          Drop a dataset. SmartML inspects it, trains <span className="text-foreground font-semibold">4 algorithms</span> in parallel, and hands back deployable code.
         </p>
       </div>
 
