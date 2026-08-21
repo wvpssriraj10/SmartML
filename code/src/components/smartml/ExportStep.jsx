@@ -4,6 +4,7 @@ import { API_BASE } from "@/api";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
+import { createRoot } from "react-dom/client";
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -130,13 +131,20 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
       chartContent = <div style={{width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666'}}>Chart type not supported</div>;
     }
 
-    const root = require("react-dom/client").createRoot(container);
+    const root = createRoot(container);
     root.render(chartContent);
 
+    let attempts = 0;
     const checkRender = () => {
+      attempts++;
       const svg = container.querySelector("svg");
       if (svg && svg.width.baseVal.value > 0 && svg.height.baseVal.value > 0) {
         captureCanvas();
+      } else if (attempts > 50) {
+        console.error(`Chart render timeout for ${title}`);
+        document.body.removeChild(container);
+        root.unmount();
+        resolve(null);
       } else {
         setTimeout(checkRender, 100);
       }
@@ -283,6 +291,8 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
           zip.file(chart.name, imgData, { base64: true });
           setIncludedFiles(prev => [...prev, { name: chart.name, description: chart.title }]);
           setExportLogs(prev => [...prev, `✓ ${chart.title} added`]);
+        } else {
+          setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}`]);
         }
       } catch (e) {
         console.warn(`Failed to generate ${chart.name}:`, e);
