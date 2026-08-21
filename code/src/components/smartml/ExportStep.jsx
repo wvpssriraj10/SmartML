@@ -38,14 +38,13 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
   return new Promise((resolve) => {
     const container = document.createElement("div");
     container.style.position = "fixed";
-    container.style.left = "0";
-    container.style.top = "0";
+    container.style.left = "-9999px";
+    container.style.top = "-9999px";
     container.style.width = `${width}px`;
     container.style.height = `${height}px`;
     container.style.background = "white";
-    container.style.zIndex = "9999";
-    container.style.pointerEvents = "none";
-    container.style.opacity = "0";
+    container.style.overflow = "hidden";
+    container.style.visibility = "hidden";
     document.body.appendChild(container);
 
     const ChartConfig = CHART_TYPES.find(c => c.key === chartType);
@@ -134,7 +133,6 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
     const root = require("react-dom/client").createRoot(container);
     root.render(chartContent);
 
-    // Wait for Recharts to fully render (SVG needs time)
     const checkRender = () => {
       const svg = container.querySelector("svg");
       if (svg && svg.width.baseVal.value > 0 && svg.height.baseVal.value > 0) {
@@ -152,7 +150,7 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
         scale: 2,
         logging: false,
         useCORS: true,
-        foreignObjectRendering: true, // Better SVG support
+        foreignObjectRendering: true,
       }).then((canvas) => {
         const imgData = canvas.toDataURL("image/png").split(",")[1];
         document.body.removeChild(container);
@@ -166,7 +164,7 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
       });
     };
 
-    setTimeout(checkRender, 300);
+    setTimeout(checkRender, 500);
   });
 }
 
