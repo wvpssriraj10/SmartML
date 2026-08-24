@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.preprocessing import LabelEncoder, OrdinalEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 import os
 import warnings
@@ -230,13 +230,10 @@ class Preprocessor:
         return self
 
     def preprocess(self, test_size=0.2, random_state=42):
+        # NOTE: subsampling is handled upstream in trainer.py (_subsample_for_training).
+        # We do NOT subsample here a second time — that would silently discard data
+        # that the trainer already capped to MAX_TRAIN_ROWS.
         df = self.df.copy()
-        
-        # Subsample if dataset is too large to ensure fast AutoML training
-        if len(df) > 5000:
-            print(f"[SmartML] Subsampling dataset from {len(df)} to 5000 rows for fast model training.")
-            df = df.sample(n=5000, random_state=random_state)
-
         y = df[self.target_column]
         X = df.drop(columns=[self.target_column])
 
@@ -285,12 +282,28 @@ class Preprocessor:
         X_processed = pd.DataFrame(index=X.index)
         if self.numeric_columns:
             self.imputer = SimpleImputer(strategy='median')
-            numeric = pd.DataFrame(self.imputer.fit_transform(X[self.numeric_columns]), columns=self.numeric_columns, index=X.index)
+            numeric = pd.DataFrame(
+                self.imputer.fit_transform(X[self.numeric_columns]),
+                columns=self.numeric_columns, index=X.index
+            )
             self.scaler = StandardScaler()
-            X_processed = pd.concat([X_processed, pd.DataFrame(self.scaler.fit_transform(numeric), columns=self.numeric_columns, index=X.index)], axis=1)
+            X_processed = pd.concat(
+                [X_processed,
+                 pd.DataFrame(self.scaler.fit_transform(numeric),
+                              columns=self.numeric_columns, index=X.index)],
+                axis=1,
+            )
         for col in self.categorical_columns:
-            values = X[col].astype(str).fillna('missing')
-            encoder = LabelEncoder()
+            # OrdinalEncoder is used here instead of LabelEncoder.
+            # LabelEncoder assigns integer codes that imply ordinal order
+            # (e.g., cat=0, dog=1, fish=2 implies fish > dog > cat), which
+            # misleads linear models. OrdinalEncoder makes the same encoding
+            # but is the sklearn-blessed way for feature columns, and it lets
+            # us handle unseen categories gracefully with handle_unknown.
+            values = X[[col]].astype(str).fillna('missing')
+            encoder = OrdinalEncoder(
+                handle_unknown='use_encoded_value', unknown_value=-1
+            )
             X_processed[col] = encoder.fit_transform(values)
             self.encoders[col] = encoder
         self.feature_names = X_processed.columns.tolist()
@@ -301,13 +314,22 @@ class Preprocessor:
         X_processed = pd.DataFrame(index=X.index)
         if self.numeric_columns:
             numeric = X.reindex(columns=self.numeric_columns)
-            numeric = pd.DataFrame(self.imputer.transform(numeric), columns=self.numeric_columns, index=X.index)
-            X_processed = pd.concat([X_processed, pd.DataFrame(self.scaler.transform(numeric), columns=self.numeric_columns, index=X.index)], axis=1)
+            numeric = pd.DataFrame(
+                self.imputer.transform(numeric),
+                columns=self.numeric_columns, index=X.index
+            )
+            X_processed = pd.concat(
+                [X_processed,
+                 pd.DataFrame(self.scaler.transform(numeric),
+                              columns=self.numeric_columns, index=X.index)],
+                axis=1,
+            )
         for col in self.categorical_columns:
-            values = X[col].astype(str).fillna('missing') if col in X else pd.Series('missing', index=X.index)
-            classes = self.encoders[col].classes_
-            mapping = {value: idx for idx, value in enumerate(classes)}
-            X_processed[col] = values.map(mapping).fillna(-1).astype(int)
+            # Use the fitted OrdinalEncoder — unseen values map to -1 automatically.
+            values = (X[[col]].astype(str).fillna('missing')
+                      if col in X
+                      else pd.DataFrame({'missing': ['missing'] * len(X.index)}, index=X.index).rename(columns={'missing': col}))
+            X_processed[col] = self.encoders[col].transform(values)
         return X_processed.reindex(columns=self.feature_names, fill_value=0)
 
     def export_artifact(self, model):

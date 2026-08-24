@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import json
@@ -10,6 +11,66 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+
+# ── LLM helpers (Gemini / OpenRouter) ────────────────────────────────────────
+
+try:
+    import google.generativeai as genai
+    _GEMINI_AVAILABLE = True
+except ImportError:
+    _GEMINI_AVAILABLE = False
+
+try:
+    import requests as _requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:
+    _REQUESTS_AVAILABLE = False
+
+
+def _call_llm_for_narrative(prompt: str) -> str | None:
+    """
+    Try Gemini first, then OpenRouter, then return None so the caller falls
+    back to the rule-based template. All errors are swallowed silently so
+    a missing key never breaks the insights endpoint.
+    """
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if _GEMINI_AVAILABLE and api_key:
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content(prompt)
+            text = response.text.strip()
+            if text:
+                return text
+        except Exception:
+            pass
+
+    or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if _REQUESTS_AVAILABLE and or_key:
+        try:
+            model_name = os.getenv("OPENROUTER_MODEL", "gpt-4o-mini").strip()
+            r = _requests.post(
+                "https://api.openrouter.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {or_key}",
+                    "Content-Type": "application/json",
+                    "X-Title": "SmartML Dashboard",
+                },
+                json={
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.6,
+                },
+                timeout=20,
+            )
+            if r.status_code == 200:
+                text = r.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    return text
+        except Exception:
+            pass
+
+    return None
 
 
 def generate_executive_insights(df: pd.DataFrame, dataset_name: str = "Dataset", llm_fn=None) -> dict:
@@ -109,22 +170,56 @@ def generate_executive_insights(df: pd.DataFrame, dataset_name: str = "Dataset",
         f"Impute or review the {missing_cells:,} missing cells ({missing_pct}%) to improve model training accuracy.",
         f"Investigate {critical_anomalies_count} critical statistical anomalies detected in numerical columns.",
         f"Deduplicate {duplicates} duplicate records ({duplicate_pct}%) before finalizing dataset.",
-        "Establish automated data validation checks at source ingestion to prevent schema drift."
+        "Establish automated data validation checks at source ingestion to prevent schema drift.",
     ]
 
-    # Generate The Data Story
-    data_story = (
-        f"The dataset '{dataset_name}' contains {rows:,} records across {cols} features ({len(numeric_cols)} numerical and {len(categorical_cols)} categorical). "
+    # ── Rule-based narrative fallbacks (used when no LLM key is configured) ──
+    _fallback_story = (
+        f"The dataset '{dataset_name}' contains {rows:,} records across {cols} features "
+        f"({len(numeric_cols)} numerical and {len(categorical_cols)} categorical). "
         f"Overall data quality is rated at {quality_score}/100 with a data completeness rate of {completeness_pct}%. "
-        f"Statistical scanning identified {len(anomalies)} anomalous observations ({critical_anomalies_count} critical, {warning_anomalies_count} warnings) and {len(strong_correlations)} strongly correlated feature pairs. "
-        f"The business risk index is currently assessed at {risk_score}/100 ({risk_level} Risk), recommending targeted data cleaning prior to executive reporting or predictive modeling."
+        f"Statistical scanning identified {len(anomalies)} anomalous observations "
+        f"({critical_anomalies_count} critical, {warning_anomalies_count} warnings) and "
+        f"{len(strong_correlations)} strongly correlated feature pairs. "
+        f"The business risk index is assessed at {risk_score}/100 ({risk_level} Risk)."
+    )
+    _fallback_summary = (
+        f"DataSense evaluated '{dataset_name}'. The pipeline processed {cols} columns with "
+        f"an overall data validity score of {validity_pct}%. "
+        f"Average inter-feature correlation: {round(avg_correlation, 2)}. "
+        f"Focus on resolving high-risk anomalies and missing values before modeling."
     )
 
-    executive_summary = (
-        f"DataSense automated intelligence evaluated dataset '{dataset_name}'. The pipeline processed {cols} columns with a overall data validity score of {validity_pct}%. "
-        f"Key insights highlight strong feature readiness with average inter-feature correlation of {round(avg_correlation, 2)}. "
-        f"Immediate operational focus should be directed toward resolving high-risk column anomalies and missing values."
+    # ── LLM-powered narrative (Gemini / OpenRouter) ──────────────────────────
+    # Build a compact stats context to keep the prompt small.
+    corr_pairs_text = (
+        ", ".join(f"{c['col1']}↔{c['col2']} ({c['correlation']})" for c in strong_correlations[:5])
+        or "none"
     )
+    llm_prompt = f"""You are a professional data analyst writing an executive intelligence report.
+Dataset: {dataset_name}
+Rows: {rows:,} | Columns: {cols} ({len(numeric_cols)} numeric, {len(categorical_cols)} categorical)
+Data Quality Score: {quality_score}/100
+Completeness: {completeness_pct}% | Consistency: {consistency_pct}% | Validity: {validity_pct}%
+Missing Cells: {missing_cells:,} ({missing_pct}%) | Duplicates: {duplicates} ({duplicate_pct}%)
+Total Anomalies: {len(anomalies)} ({critical_anomalies_count} critical, {warning_anomalies_count} warnings)
+Business Risk: {risk_score}/100 ({risk_level})
+Strong Feature Correlations: {corr_pairs_text}
+
+Write exactly TWO paragraphs separated by the marker |||:
+1. DATA STORY: A compelling 3-4 sentence narrative for a business audience describing the dataset's key characteristics, quality highlights, and what the statistics reveal about the data's readiness for analysis.
+2. EXECUTIVE SUMMARY: A concise 2-3 sentence executive summary with actionable focus areas and strategic recommendations.
+
+Important: Only output the two paragraphs separated by |||. Do not include headings or labels."""
+
+    llm_result = _call_llm_for_narrative(llm_prompt)
+    if llm_result and "|||" in llm_result:
+        parts = llm_result.split("|||", 1)
+        data_story = parts[0].strip()
+        executive_summary = parts[1].strip()
+    else:
+        data_story = llm_result.strip() if llm_result else _fallback_story
+        executive_summary = _fallback_summary
 
     return {
         "dataset_name": dataset_name,
@@ -137,11 +232,12 @@ def generate_executive_insights(df: pd.DataFrame, dataset_name: str = "Dataset",
         "data_completeness_pct": completeness_pct,
         "consistency_pct": consistency_pct,
         "validity_pct": validity_pct,
+        "llm_powered": llm_result is not None,  # lets the UI show a badge
         "processing_summary": {
             "missing_fixed": missing_cells,
             "outliers_removed": len(anomalies),
             "duplicates_removed": duplicates,
-            "columns_processed": cols
+            "columns_processed": cols,
         },
         "intelligence_grid": {
             "missing_pct": missing_pct,
@@ -149,19 +245,19 @@ def generate_executive_insights(df: pd.DataFrame, dataset_name: str = "Dataset",
             "categorical_count": len(categorical_cols),
             "numerical_count": len(numeric_cols),
             "anomalies_count": len(anomalies),
-            "strong_correlations_count": len(strong_correlations)
+            "strong_correlations_count": len(strong_correlations),
         },
         "data_story": data_story,
         "executive_summary": executive_summary,
         "risk_breakdown": risk_breakdown,
         "recommended_actions": recommended_actions,
-        "anomalies": anomalies[:15],  # Top 15 anomalies
+        "anomalies": anomalies[:15],
         "anomalies_summary": {
             "total": len(anomalies),
             "critical": critical_anomalies_count,
-            "warning": warning_anomalies_count
+            "warning": warning_anomalies_count,
         },
-        "strong_correlations": strong_correlations[:10]
+        "strong_correlations": strong_correlations[:10],
     }
 
 

@@ -148,7 +148,7 @@ class Trainer:
                     if hasattr(result['model'], 'predict_proba'):
                         try:
                             y_prob = result['model'].predict_proba(X_test)
-                        except:
+                        except Exception:
                             pass
                     metrics = compute_classification_metrics(y_test, y_pred, y_prob)
                 else:
