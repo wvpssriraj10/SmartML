@@ -55,77 +55,73 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
     let chartContent;
     if (isPie) {
       chartContent = (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={Math.min(width, height) * 0.35}
-              dataKey="value"
-              nameKey="name"
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              labelLine={false}
-            >
-              {chartData.map((_, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-            </Pie>
-            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
-          </PieChart>
-        </ResponsiveContainer>
+        <PieChart width={width} height={height}>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={Math.min(width, height) * 0.35}
+            dataKey="value"
+            nameKey="name"
+            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            labelLine={false}
+            isAnimationActive={false}
+          >
+            {chartData.map((_, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+          </Pie>
+          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
+        </PieChart>
       );
     } else if (isHistogram && ChartConfig) {
       chartContent = (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 8 }}>
-            <CartesianGrid stroke="#e5e7eb" horizontal={false} />
-            <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
-            <Bar dataKey="value" fill="url(#histFill)" radius={[0, 6, 6, 0]} />
-            <defs>
-              <linearGradient id="histFill" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#6366f1" />
-                <stop offset="100%" stopColor="#a855f7" />
-              </linearGradient>
-            </defs>
-          </BarChart>
-        </ResponsiveContainer>
+        <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ left: 0, right: 8 }}>
+          <CartesianGrid stroke="#e5e7eb" horizontal={false} />
+          <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
+          <Bar dataKey="value" fill="url(#histFill)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
+          <defs>
+            <linearGradient id="histFill" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#a855f7" />
+            </linearGradient>
+          </defs>
+        </BarChart>
       );
     } else if (ChartConfig) {
       const Series = ChartConfig.Series;
       chartContent = (
-        <ResponsiveContainer width="100%" height="100%">
-          <ChartConfig.Chart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
-                <stop offset="100%" stopColor="#a855f7" stopOpacity={0.6} />
-              </linearGradient>
-              <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" />
-                <stop offset="100%" stopColor="#3b82f6" />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="#e5e7eb" horizontal={chartType !== "scatter"} />
-            <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "#f3f4f6" }} />
-            <Legend />
-            {chartData.length > 0 && Object.keys(chartData[0]).filter(k => k !== xCol).map((key, i) => (
-              <Series
-                key={key}
-                dataKey={key}
-                name={key}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                fill={chartType === "area" ? "url(#barFill)" : "none"}
-                fillOpacity={0.2}
-                dot={chartType === "scatter" || chartType === "line"}
-                activeDot={{ r: 6 }}
-              />
-            ))}
-          </ChartConfig.Chart>
-        </ResponsiveContainer>
+        <ChartConfig.Chart width={width} height={height} data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="#a855f7" stopOpacity={0.6} />
+            </linearGradient>
+            <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="#e5e7eb" horizontal={chartType !== "scatter"} />
+          <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "#f3f4f6" }} />
+          <Legend />
+          {chartData.length > 0 && Object.keys(chartData[0]).filter(k => k !== xCol).map((key, i) => (
+            <Series
+              key={key}
+              dataKey={key}
+              name={key}
+              stroke={CHART_COLORS[i % CHART_COLORS.length]}
+              fill={chartType === "area" ? "url(#barFill)" : "none"}
+              fillOpacity={0.2}
+              dot={chartType === "scatter" || chartType === "line"}
+              activeDot={{ r: 6 }}
+              isAnimationActive={false}
+            />
+          ))}
+        </ChartConfig.Chart>
       );
     } else {
       chartContent = <div style={{width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666'}}>Chart type not supported</div>;
