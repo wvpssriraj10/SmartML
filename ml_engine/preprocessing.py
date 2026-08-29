@@ -224,6 +224,8 @@ class Preprocessor:
         for col in df.columns:
             if df[col].isnull().sum() / len(df) > 0.8:
                 cols_to_drop.append(col)
+            elif col != self.target_column and (pd.api.types.is_datetime64_any_dtype(df[col]) or 'date' in col.lower() or 'time' in col.lower()):
+                cols_to_drop.append(col)
         df = df.drop(columns=cols_to_drop)
         self.used_columns = [c for c in df.columns if c != self.target_column]
         self.df = df

@@ -69,11 +69,10 @@ def get_dataset_by_id(dataset_id: str, user: dict = Depends(get_current_user)):
 @router.delete("/{dataset_id}")
 def remove_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
     ds = _load_ds(dataset_id, user["id"])
-    for key in ("file_path", "cleaned_file_path"):
-        path = ds.get(key)
-        if path and os.path.exists(path):
+    for file in os.listdir(UPLOAD_DIR):
+        if file.startswith(dataset_id):
             try:
-                os.remove(path)
+                os.remove(os.path.join(UPLOAD_DIR, file))
             except Exception:
                 pass
     delete_dataset(dataset_id, user_id=user["id"])
@@ -159,16 +158,18 @@ def apply_cleaning_step(
         replace_with=req.replace_with,
     )
 
-    cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned.csv")
-    cleaned_df.to_csv(cleaned_file_path, index=False)
-
     pipeline = (
         json.loads(ds.get("cleaning_pipeline", "[]"))
         if ds.get("cleaning_pipeline")
         else []
     )
+    
+    step_index = len(pipeline) + 1
+    cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned_{step_index}.csv")
+    cleaned_df.to_csv(cleaned_file_path, index=False)
+
     new_step = {
-        "step_id": f"step_{len(pipeline) + 1}",
+        "step_id": f"step_{step_index}",
         "action": req.action,
         "column": req.column,
         "strategy": req.strategy,
@@ -211,27 +212,42 @@ def undo_cleaning_step(dataset_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="No cleaning steps to undo.")
 
     pipeline.pop()
-    inspector = DatasetInspector(ds["file_path"])
-    inspector.load()
-    df = inspector.df
+    
+    undone_step_index = len(pipeline) + 1
+    undone_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned_{undone_step_index}.csv")
+    if os.path.exists(undone_file_path):
+        os.remove(undone_file_path)
+        
+    old_cleaned_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned.csv")
+    if os.path.exists(old_cleaned_path):
+        os.remove(old_cleaned_path)
 
-    for step in pipeline:
-        df, _ = apply_cleaning_action(
-            df=df,
-            action=step.get("action"),
-            column=step.get("column"),
-            strategy=step.get("strategy"),
-            value=step.get("value"),
-            replace_with=step.get("replace_with"),
-        )
-
-    cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned.csv")
     if pipeline:
-        df.to_csv(cleaned_file_path, index=False)
+        step_index = len(pipeline)
+        cleaned_file_path = os.path.join(UPLOAD_DIR, f"{dataset_id}_cleaned_{step_index}.csv")
+        if not os.path.exists(cleaned_file_path):
+            inspector = DatasetInspector(ds["file_path"])
+            inspector.load()
+            df = inspector.df
+            for step in pipeline:
+                df, _ = apply_cleaning_action(
+                    df=df,
+                    action=step.get("action"),
+                    column=step.get("column"),
+                    strategy=step.get("strategy"),
+                    value=step.get("value"),
+                    replace_with=step.get("replace_with"),
+                )
+            df.to_csv(cleaned_file_path, index=False)
+        else:
+            inspector = DatasetInspector(cleaned_file_path)
+            inspector.load()
+            df = inspector.df
     else:
-        if os.path.exists(cleaned_file_path):
-            os.remove(cleaned_file_path)
         cleaned_file_path = None
+        inspector = DatasetInspector(ds["file_path"])
+        inspector.load()
+        df = inspector.df
 
     metrics = calculate_dataset_metrics(df)
     update_dataset(

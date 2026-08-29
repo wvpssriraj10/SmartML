@@ -35,7 +35,9 @@ def _subsample_for_training(df, target_column, limit=MAX_TRAIN_ROWS):
 
 
 def convert(obj):
-    if isinstance(obj, dict):
+    if pd.isna(obj):
+        return None
+    elif isinstance(obj, dict):
         return {k: convert(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [convert(v) for v in obj]
