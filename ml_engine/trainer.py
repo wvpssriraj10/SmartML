@@ -35,18 +35,42 @@ def _subsample_for_training(df, target_column, limit=MAX_TRAIN_ROWS):
 
 
 def convert(obj):
-    if pd.isna(obj):
-        return None
-    elif isinstance(obj, dict):
+    """Recursively convert objects to JSON‑serialisable types.
+    Handles pandas / numpy scalars, arrays, and treats NaN/NA as ``None``.
+    """
+    # Dictionaries – recurse on values
+    if isinstance(obj, dict):
         return {k: convert(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+
+    # Lists / tuples – recurse on each element
+    if isinstance(obj, (list, tuple)):
         return [convert(v) for v in obj]
-    elif isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
+
+    # Numpy array – convert to plain Python list
+    if isinstance(obj, np.ndarray):
         return obj.tolist()
+
+    # Numpy scalar (np.generic) – cast to Python scalar
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    # Pandas scalar types (NA / Timestamp / NaT)
+    if isinstance(obj, (pd._libs.missing.NAType,
+                        pd._libs.tslibs.timestamps.Timestamp,
+                        pd._libs.tslibs.nattype.NaTType)):
+        return None
+
+    # Pandas Index / Series – convert to plain list
+    if isinstance(obj, (pd.Index, pd.Series)):
+        return [convert(v) for v in obj]
+
+    # Primitive types – safely check for NaN/NA
+    try:
+        if pd.isna(obj):
+            return None
+    except Exception:
+        pass
+
     return obj
 
 
