@@ -36,6 +36,19 @@ function ErrorComponent({ error, reset }) {
 
   const message = error?.message || String(error || "Unknown error");
 
+  if (
+    message.includes("Failed to fetch dynamically imported module") ||
+    message.includes("Importing a module script failed")
+  ) {
+    if (!sessionStorage.getItem("reloaded_for_chunk_error")) {
+      sessionStorage.setItem("reloaded_for_chunk_error", "true");
+      window.location.reload();
+      return null;
+    }
+  } else {
+    sessionStorage.removeItem("reloaded_for_chunk_error");
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center glass-panel rounded-2xl p-10">
