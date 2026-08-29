@@ -12,10 +12,11 @@ from ..schemas import UploadResponse
 from ml_engine.trainer import convert
 from ml_engine.preprocessing import DatasetInspector
 from ml_engine.cleaning import calculate_dataset_metrics
+import logging
 
-UPLOAD_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), '..', '..', 'uploads')
-)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "..", "uploads"))
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # 100 MB hard cap – protects the free-tier server from OOM on huge files.
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -24,11 +25,30 @@ ALLOWED_EXTENSIONS = {'.csv', '.xlsx', '.xls', '.json'}
 
 router = APIRouter(tags=["upload"])
 
+logger = logging.getLogger("smartml.upload")
+logger.setLevel(logging.INFO)
+
 
 # ── Supabase S3 client (lazy singleton) ──────────────────────────────────────
 
 _supabase = None
 
+async def _read_limited(file: UploadFile, limit: int) -> bytes:
+    """Read at most `limit` bytes from an UploadFile. Raises HTTPException if the limit is exceeded."""
+    total = 0
+    chunks = []
+    while True:
+        data = await file.read(min(4 * 1024 * 1024, limit - total))
+        if not data:
+            break
+        total += len(data)
+        if total > limit:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds the {limit // (1024 * 1024)} MiB upload limit."
+            )
+        chunks.append(data)
+    return b"".join(chunks)
 
 def _get_supabase():
     global _supabase
@@ -135,27 +155,28 @@ async def upload_file(
             detail=f"Unsupported format: {ext}. Use CSV, Excel, or JSON.",
         )
 
-    # Read with a size cap — avoids reading a 1 GB file fully into memory.
-    chunk = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(chunk) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                f"File exceeds the {MAX_UPLOAD_BYTES // 1024 // 1024} MB upload limit. "
-                "Use a smaller dataset or the Supabase direct-upload flow."
-            ),
-        )
+    # Read with a size cap — uses streaming to abort early.
+    chunk = await _read_limited(file, MAX_UPLOAD_BYTES)
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
     safe_name = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
 
-    # Write synchronously — the file is already in memory (≤100 MB).
-    with open(file_path, "wb") as fh:
-        fh.write(chunk)
-
-    payload = _inspect_and_register(file_path, file.filename, user["id"])
-    return UploadResponse(**payload)
+    try:
+        with open(file_path, "wb") as fh:
+            fh.write(chunk)
+        payload = _inspect_and_register(file_path, file.filename, user["id"])
+        logger.info(
+            "Uploaded dataset %s (%d bytes) – job_id=%s",
+            file.filename,
+            len(chunk),
+            payload["job_id"],
+        )
+        return UploadResponse(**payload)
+    except Exception as exc:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.exception("Upload processing failed for %s", file.filename)
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 # ── Supabase presign ──────────────────────────────────────────────────────────
