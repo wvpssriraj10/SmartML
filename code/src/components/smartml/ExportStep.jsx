@@ -43,9 +43,9 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
     container.style.top = "-9999px";
     container.style.width = `${width}px`;
     container.style.height = `${height}px`;
-    container.style.background = "white";
+    container.style.background = "#ffffff";
     container.style.overflow = "hidden";
-    container.style.visibility = "hidden";
+    container.style.zIndex = "-9999";
     document.body.appendChild(container);
 
     const ChartConfig = CHART_TYPES.find(c => c.key === chartType);
@@ -75,10 +75,10 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
       );
     } else if (isHistogram && ChartConfig) {
       chartContent = (
-        <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ left: 0, right: 8 }}>
+        <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 20, bottom: 20 }}>
           <CartesianGrid stroke="#e5e7eb" horizontal={false} />
-          <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <XAxis type="number" tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+          <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
           <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
           <Bar dataKey="value" fill="url(#histFill)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
           <defs>
@@ -91,12 +91,13 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
       );
     } else if (ChartConfig) {
       const Series = ChartConfig.Series;
+      const keys = chartData.length > 0 ? Object.keys(chartData[0]).filter(k => k !== xCol) : [yCol];
       chartContent = (
-        <ChartConfig.Chart width={width} height={height} data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+        <ChartConfig.Chart width={width} height={height} data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
           <defs>
             <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#a855f7" stopOpacity={0.6} />
+              <stop offset="100%" stopColor="#a855f7" stopOpacity={0.8} />
             </linearGradient>
             <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10b981" />
@@ -104,20 +105,19 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#e5e7eb" horizontal={chartType !== "scatter"} />
-          <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+          <YAxis tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
           <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "#f3f4f6" }} />
           <Legend />
-          {chartData.length > 0 && Object.keys(chartData[0]).filter(k => k !== xCol).map((key, i) => (
+          {keys.map((key, i) => (
             <Series
               key={key}
               dataKey={key}
               name={key}
               stroke={CHART_COLORS[i % CHART_COLORS.length]}
-              fill={chartType === "area" ? "url(#barFill)" : "none"}
-              fillOpacity={0.2}
-              dot={chartType === "scatter" || chartType === "line"}
-              activeDot={{ r: 6 }}
+              fill={chartType === "area" ? "url(#barFill)" : chartType === "bar" ? CHART_COLORS[i % CHART_COLORS.length] : "none"}
+              fillOpacity={chartType === "bar" || chartType === "area" ? 0.85 : 1}
+              dot={chartType === "scatter" || chartType === "line" ? { r: 4, fill: CHART_COLORS[i % CHART_COLORS.length] } : false}
               isAnimationActive={false}
             />
           ))}
@@ -130,23 +130,18 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
     const root = createRoot(container);
     root.render(chartContent);
 
-    let attempts = 0;
-    const checkRender = () => {
-      attempts++;
-      const svg = container.querySelector("svg");
-      if (svg && svg.width.baseVal.value > 0 && svg.height.baseVal.value > 0) {
-        captureCanvas();
-      } else if (attempts > 50) {
-        console.error(`Chart render timeout for ${title}`);
-        document.body.removeChild(container);
+    const cleanUp = () => {
+      try {
+        if (document.body.contains(container)) {
+          document.body.removeChild(container);
+        }
         root.unmount();
-        resolve(null);
-      } else {
-        setTimeout(checkRender, 100);
+      } catch (e) {
+        // Ignore cleanup errors
       }
     };
 
-    const captureCanvas = () => {
+    const fallbackHtml2Canvas = () => {
       html2canvas(container, {
         width,
         height,
@@ -154,21 +149,71 @@ function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800
         scale: 2,
         logging: false,
         useCORS: true,
-        foreignObjectRendering: true,
-      }).then((canvas) => {
-        const imgData = canvas.toDataURL("image/png").split(",")[1];
-        document.body.removeChild(container);
-        root.unmount();
-        resolve(imgData);
-      }).catch((err) => {
-        console.error("html2canvas error:", err);
-        document.body.removeChild(container);
-        root.unmount();
-        resolve(null);
-      });
+      })
+        .then((canvas) => {
+          const imgData = canvas.toDataURL("image/png").split(",")[1];
+          cleanUp();
+          resolve(imgData);
+        })
+        .catch((err) => {
+          console.error("html2canvas error:", err);
+          cleanUp();
+          resolve(null);
+        });
     };
 
-    setTimeout(checkRender, 500);
+    const attemptCapture = () => {
+      const svg = container.querySelector("svg");
+      if (svg) {
+        try {
+          const serializer = new XMLSerializer();
+          let svgString = serializer.serializeToString(svg);
+          if (!svgString.includes("xmlns=")) {
+            svgString = svgString.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+          }
+          const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = width * 2;
+            canvas.height = height * 2;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(2, 2);
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(url);
+            const imgData = canvas.toDataURL("image/png").split(",")[1];
+            cleanUp();
+            resolve(imgData);
+          };
+          img.onerror = () => {
+            fallbackHtml2Canvas();
+          };
+          img.src = url;
+          return;
+        } catch (e) {
+          console.warn("SVG direct conversion failed, falling back to html2canvas", e);
+        }
+      }
+      fallbackHtml2Canvas();
+    };
+
+    let attempts = 0;
+    const checkRender = () => {
+      attempts++;
+      const svg = container.querySelector("svg");
+      if (svg && svg.childNodes.length > 0) {
+        attemptCapture();
+      } else if (attempts > 30) {
+        fallbackHtml2Canvas();
+      } else {
+        setTimeout(checkRender, 100);
+      }
+    };
+
+    setTimeout(checkRender, 200);
   });
 }
 
@@ -262,12 +307,10 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
       );
     }
 
-    // Feature importance (if available)
-    if (champion.metrics?.feature_importance) {
-      chartsToGenerate.push(
-        { name: "feature_importance.png", title: "Feature Importance", type: "bar", data: generateFeatureImportanceData(champion), xCol: "feature", yCol: "importance" }
-      );
-    }
+    // Feature importance visualization
+    chartsToGenerate.push(
+      { name: "feature_importance.png", title: "Feature Importance", type: "bar", data: generateFeatureImportanceData(champion), xCol: "feature", yCol: "importance" }
+    );
 
     // Training curves placeholder
     chartsToGenerate.push(
