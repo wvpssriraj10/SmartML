@@ -71,35 +71,33 @@ def _build_system_prompt(inspection: dict, job_context: dict) -> str:
 
     job_ctx = json.dumps(job_context, indent=2) if job_context else 'No training results yet.'
 
-    return f"""You are SmartML Assistant, an expert AI data scientist embedded in the SmartML Dashboard.
-You help users understand their dataset and configure ML training.
+    return f"""You are SmartML Assistant, a versatile general-purpose AI assistant and expert data scientist embedded in the SmartML Dashboard.
 
-DATASET SUMMARY:
-- Rows: {rows}, Columns: {cols}
+GENERAL CAPABILITIES & INSTRUCTIONS:
+- You are a full general-purpose LLM. Answer ANY question on ANY topic (general knowledge, coding, mathematics, science, machine learning, writing, logic, general queries, etc.).
+- You are NOT restricted to talking about datasets or machine learning. If the user asks a question unrelated to the dataset or ML (e.g. "What is quicksort?", "How do HTTP requests work?", "Explain quantum computing"), answer their question accurately, completely, and directly.
+- The dataset information below is provided as ADDITIONAL CONTEXT for reference when relevant. Use it whenever the user asks about their dataset, columns, data cleaning, modeling, or evaluation metrics, but do not force dataset context into responses when the user is asking general questions.
+
+DATASET CONTEXT (REFERENCE WHEN RELEVANT):
+- Active Dataset Dimensions: {rows} rows, {cols} columns
 - Column names: {', '.join(col_names[:20])}{'...' if len(col_names) > 20 else ''}
 - Numeric columns: {', '.join(num_cols[:10])}
 - Categorical columns: {', '.join(cat_cols[:10])}
 - Total missing values: {total_missing}
 
-COMPACT COLUMN STATS (up to 10):
+COLUMN STATS SAMPLE:
 {chr(10).join(stats_lines) if stats_lines else 'No column stats available.'}
 
-SAMPLE ROWS (up to 5):
+SAMPLE ROWS:
 {chr(10).join(sample_lines) if sample_lines else 'No sample available.'}
 
-CONTEXT:
+MODEL & TRAINING CONTEXT:
 {job_ctx}
 
-YOUR ROLE:
-1. Help users pick a target column by asking what they want to predict
-2. Clarify if it's classification (categories) or regression (numbers)
-3. Explain model results in plain English when training is done
-4. Answer questions about the dataset, features, and ML concepts
-5. Be concise, friendly, and avoid excessive jargon
-
-When suggesting a target column or problem type, end your message with JSON in this exact format:
+RECOMMENDATION FORMAT (ONLY WHEN SUGGESTING TARGETS):
+When explicitly suggesting a target column or problem type for ML training, end your message with a JSON block in this exact format:
 <suggestion>{{"target_column": "column_name", "problem_type": "classification|regression"}}</suggestion>
-Only include this if you are confident about a suggestion. If needed you may also include the JSON as a fenced ```json block``` or as a plain JSON object on its own line.
+Only include this if you are confident about a target suggestion.
 """
 
 
@@ -113,7 +111,6 @@ def _rule_based_response(message: str, inspection: dict, results_context: dict) 
     # Check for target suggestion queries
     target_keywords = ["predict", "target", "label", "classify", "forecast", "outcome", "what should"]
     if any(k in msg_lower for k in target_keywords):
-        # Heuristic: prefer columns named 'target', 'label', 'class', 'output', 'y'
         preferred = ['target', 'label', 'class', 'output', 'y', 'result', 'churn', 'price', 'salary',
                      'diagnosis', 'survived', 'species', 'type', 'category', 'outcome']
         suggested = None
@@ -126,7 +123,6 @@ def _rule_based_response(message: str, inspection: dict, results_context: dict) 
                 break
 
         if not suggested and col_names:
-            # Suggest last column by convention
             suggested = col_names[-1]
 
         if suggested:
@@ -184,24 +180,20 @@ def _rule_based_response(message: str, inspection: dict, results_context: dict) 
         cols_count = inspection.get("columns", "?")
         return {
             "reply": f"👋 Hi! I'm your SmartML Assistant.\n\n"
-                     f"I can see you've uploaded a dataset with **{rows} rows** and **{cols_count} columns**.\n\n"
-                     f"Here's what I can help you with:\n"
-                     f"- 🎯 Pick the right **target column** to predict\n"
-                     f"- 🔍 Understand your **data quality** (missing values, types)\n"
-                     f"- 📊 Explain **model results** after training\n"
-                     f"- 💡 Answer **ML questions** in plain English\n\n"
-                     f"What would you like to predict from this dataset?",
+                     f"I'm a general AI assistant! You can ask me **any question** (coding, math, general knowledge, machine learning), "
+                     f"or ask specifically about your uploaded dataset (**{rows} rows**, **{cols_count} columns**).\n\n"
+                     f"How can I help you today?",
             "suggested_target": None,
             "suggested_problem_type": None
         }
 
     # Default fallback
-    cols_preview = ", ".join(f"`{c}`" for c in col_names[:8])
+    cols_preview = ", ".join(f"`{c}`" for c in col_names[:8]) if col_names else "none"
     return {
         "reply": (
-            f"I'm here to help! Your dataset has these columns: {cols_preview}{'...' if len(col_names) > 8 else ''}.\n\n"
-            f"**Tip:** Set the OPENROUTER_API_KEY environment variable for smarter AI responses. "
-            f"Ask me about your data, missing values, or which column to predict!"
+            f"I am ready to answer any question or assist with your dataset.\n\n"
+            f"*(Tip: Set `GEMINI_API_KEY` or `OPENROUTER_API_KEY` in `.env` to enable live LLM answers for all topics).* \n\n"
+            f"Uploaded dataset context: {rows if 'rows' in inspection else '?'} rows, Columns = {cols_preview}."
         ),
         "suggested_target": None,
         "suggested_problem_type": None

@@ -89,7 +89,7 @@ export function ChatSidebar({ messages, onSend, onAssistantReply, onAsk }) {
               }
             }}
             rows={1}
-            placeholder="Ask about your dataset, models, metrics…"
+            placeholder="Ask me anything, or about your dataset & models…"
             className="max-h-32 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <button
@@ -102,7 +102,7 @@ export function ChatSidebar({ messages, onSend, onAssistantReply, onAsk }) {
           </button>
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {["What target should I pick?", "Which model is best?", "Explain the metrics"].map((s) => (
+          {["Ask any question", "Target column suggestion?", "Explain Random Forest", "Write Python code"].map((s) => (
             <button
               key={s}
               onClick={() => setInput(s)}
