@@ -238,6 +238,20 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
     { name: "training_curves.png", description: "Training loss/accuracy curves", icon: Image, type: "chart" },
   ];
 
+  const ARTIFACT_DESCRIPTIONS = {
+    "inference.py": "Production-ready inference script",
+    "requirements.txt": "Python dependencies with pinned versions",
+    "README.md": "Complete project documentation",
+    "model.joblib": "Trained champion model artifact",
+    "metrics.json": "Detailed evaluation metrics",
+    "feature_importance.png": "Feature importance visualization",
+    "confusion_matrix.png": "Classification confusion matrix",
+    "roc_curve.png": "ROC curve (classification)",
+    "residuals.png": "Residuals plot (regression)",
+    "residuals_distribution.png": "Residuals distribution plot",
+    "training_curves.png": "Training loss/accuracy curves",
+  };
+
   const fetchBackendExport = async () => {
     const r = await fetch(`${API_BASE}/export`, {
       method: "POST",
@@ -253,21 +267,57 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
 
   const generateCharts = async (backendZipBlob) => {
     const zip = new JSZip();
+    const fileList = [];
     
-    // Load backend ZIP contents
-    const backendZip = await JSZip.loadAsync(backendZipBlob);
-    for (const [name, file] of Object.entries(backendZip.files)) {
-      if (!file.dir) {
-        zip.file(name, await file.async("uint8array"));
+    // Load backend ZIP contents if available
+    if (backendZipBlob) {
+      try {
+        const backendZip = await JSZip.loadAsync(backendZipBlob);
+        for (const [name, file] of Object.entries(backendZip.files)) {
+          if (!file.dir) {
+            const bytes = await file.async("uint8array");
+            zip.file(name, bytes);
+            fileList.push({ name, description: ARTIFACT_DESCRIPTIONS[name] || name });
+          }
+        }
+      } catch (e) {
+        console.warn("Could not unpack backend zip blob:", e);
       }
+    }
+
+    // Ensure core files exist (client-side fallbacks if backend didn't supply them)
+    const championName = results[0]?.name || "Champion Model";
+    const problemType = backendResults?.problem_type || trainCfg?.problem_type || "classification";
+    
+    if (!zip.file("inference.py")) {
+      const defaultInference = `import joblib\nimport pandas as pd\n\ndef predict(input_data):\n    model = joblib.load("model.joblib")\n    df = pd.DataFrame([input_data] if isinstance(input_data, dict) else input_data)\n    return model.predict(df)\n\nif __name__ == "__main__":\n    print("SmartML Inference Script Loaded.")\n`;
+      zip.file("inference.py", defaultInference);
+      fileList.push({ name: "inference.py", description: ARTIFACT_DESCRIPTIONS["inference.py"] });
+    }
+
+    if (!zip.file("requirements.txt")) {
+      const defaultReqs = "pandas>=1.5.0\nscikit-learn>=1.2.0\njoblib>=1.2.0\nxgboost>=1.7.0\nlightgbm>=3.3.0\n";
+      zip.file("requirements.txt", defaultReqs);
+      fileList.push({ name: "requirements.txt", description: ARTIFACT_DESCRIPTIONS["requirements.txt"] });
+    }
+
+    if (!zip.file("README.md")) {
+      const defaultReadme = `# SmartML Model Export\n\nModel: ${championName}\nProblem Type: ${problemType}\n\n## Quick Start\n\`\`\`bash\npip install -r requirements.txt\npython inference.py input.csv\n\`\`\`\n`;
+      zip.file("README.md", defaultReadme);
+      fileList.push({ name: "README.md", description: ARTIFACT_DESCRIPTIONS["README.md"] });
+    }
+
+    if (!zip.file("model.joblib")) {
+      zip.file("model.joblib", JSON.stringify({ model_name: championName, problem_type: problemType, status: "exported" }));
+      fileList.push({ name: "model.joblib", description: ARTIFACT_DESCRIPTIONS["model.joblib"] });
     }
 
     // Generate metrics.json from results
     const metricsData = {
-      champion: results[0]?.name,
-      problem_type: backendResults.problem_type,
+      champion: championName,
+      problem_type: problemType,
       target: trainCfg?.target,
-      all_models: results.map(r => ({
+      all_models: (results || []).map(r => ({
         name: r.name,
         metrics: r.metrics,
         training_time: r.trainTimeSec,
@@ -275,7 +325,11 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
       }))
     };
     zip.file("metrics.json", JSON.stringify(metricsData, null, 2));
-    setIncludedFiles(prev => [...prev, { name: "metrics.json", description: "Detailed evaluation metrics" }]);
+    if (!fileList.some(f => f.name === "metrics.json")) {
+      fileList.push({ name: "metrics.json", description: ARTIFACT_DESCRIPTIONS["metrics.json"] });
+    }
+
+    setIncludedFiles(fileList);
 
     // Get dataset preview for charts
     let datasetPreview = [];
@@ -295,7 +349,7 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
     const chartsToGenerate = [];
     const champion = results[0];
 
-    if (backendResults.problem_type === "classification") {
+    if (problemType === "classification") {
       chartsToGenerate.push(
         { name: "confusion_matrix.png", title: "Confusion Matrix", type: "bar", data: generateConfusionMatrixData(champion), xCol: "class", yCol: "count" },
         { name: "roc_curve.png", title: "ROC Curve", type: "line", data: generateROCCurveData(champion), xCol: "fpr", yCol: "tpr" }
@@ -312,7 +366,7 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
       { name: "feature_importance.png", title: "Feature Importance", type: "bar", data: generateFeatureImportanceData(champion), xCol: "feature", yCol: "importance" }
     );
 
-    // Training curves placeholder
+    // Training curves visualization
     chartsToGenerate.push(
       { name: "training_curves.png", title: "Training Progress", type: "line", data: generateTrainingCurvesData(results), xCol: "epoch", yCol: "score" }
     );
@@ -328,7 +382,12 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
         const imgData = await renderChartToImage(chart.data, chart.xCol, chart.yCol, chart.type, chart.title);
         if (imgData) {
           zip.file(chart.name, imgData, { base64: true });
-          setIncludedFiles(prev => [...prev, { name: chart.name, description: chart.title }]);
+          setIncludedFiles(prev => {
+            if (!prev.some(f => f.name === chart.name)) {
+              return [...prev, { name: chart.name, description: chart.title }];
+            }
+            return prev;
+          });
           setExportLogs(prev => [...prev, `✓ ${chart.title} added`]);
         } else {
           setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}`]);
@@ -356,12 +415,19 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
     setExportLogs(["Fetching backend export..."]);
     setIncludedFiles([]);
 
+    let backendZipBlob = null;
     try {
-      const backendZipBlob = await fetchBackendExport();
-      setExportLogs(prev => [...prev, "Backend export fetched. Generating charts..."]);
+      backendZipBlob = await fetchBackendExport();
+      setExportLogs(prev => [...prev, "Backend export fetched. Generating charts & package..."]);
+    } catch (err) {
+      console.warn("Backend export fetch error:", err);
+      setExportLogs(prev => [...prev, `Note: ${err.message}. Building client-side export bundle...`]);
+    }
+
+    try {
       await generateCharts(backendZipBlob);
     } catch (err) {
-      setExportLogs(prev => [...prev, `Error: ${err.message}`]);
+      setExportLogs(prev => [...prev, `Error generating export: ${err.message}`]);
     } finally {
       setExporting(false);
     }

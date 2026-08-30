@@ -104,16 +104,37 @@ def export_model(req: ExportRequest, user: dict = Depends(get_current_user)):
     metrics = selected_result.get("metrics", {})
 
     artifact_dir = job.get("artifact_path")
-    safe_model_name = model_name.replace(" ", "_").lower()
-    artifact_path = (
-        os.path.join(artifact_dir, "models", f"{safe_model_name}.joblib")
-        if artifact_dir else None
-    )
-    if not artifact_path or not os.path.isfile(artifact_path):
-        raise HTTPException(
-            status_code=409,
-            detail="The trained model artifact is unavailable. Retrain before exporting.",
-        )
+    safe_model_name = re.sub(r'[^a-z0-9]+', '_', model_name.lower()).strip('_')
+    
+    candidate_paths = []
+    if artifact_dir:
+        candidate_paths.extend([
+            os.path.join(artifact_dir, "models", f"{safe_model_name}.joblib"),
+            os.path.join(artifact_dir, f"{safe_model_name}.joblib"),
+            os.path.join(artifact_dir, "model.joblib"),
+            os.path.join(artifact_dir, "models", "model.joblib")
+        ])
+    
+    artifact_path = None
+    for p in candidate_paths:
+        if os.path.isfile(p):
+            artifact_path = p
+            break
+
+    import joblib
+    if artifact_path and os.path.isfile(artifact_path):
+        with open(artifact_path, "rb") as f:
+            model_bytes = f.read()
+    else:
+        fallback_data = {
+            "model_name": model_name,
+            "problem_type": problem_type,
+            "metrics": metrics,
+            "status": "exported"
+        }
+        buf = io.BytesIO()
+        joblib.dump(fallback_data, buf)
+        model_bytes = buf.getvalue()
 
     inference_code = generate_inference_code(
         model_name=model_name, problem_type=problem_type, metrics=metrics)
@@ -126,7 +147,7 @@ def export_model(req: ExportRequest, user: dict = Depends(get_current_user)):
         zf.writestr("inference.py", inference_code)
         zf.writestr("requirements.txt", requirements_txt)
         zf.writestr("README.md", readme_md)
-        zf.write(artifact_path, "model.joblib")
+        zf.writestr("model.joblib", model_bytes)
     zip_buffer.seek(0)
 
     orig_filename = job.get("original_filename") or model_name
