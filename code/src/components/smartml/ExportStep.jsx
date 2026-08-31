@@ -36,184 +36,174 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }) => {
 };
 
 function renderChartToImage(chartData, xCol, yCol, chartType, title, width = 800, height = 500) {
-  return new Promise((resolve) => {
-    const container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "-9999px";
-    container.style.top = "-9999px";
-    container.style.width = `${width}px`;
-    container.style.height = `${height}px`;
-    container.style.background = "#ffffff";
-    container.style.overflow = "hidden";
-    container.style.zIndex = "-9999";
-    document.body.appendChild(container);
+  return new Promise((resolve, reject) => {
+    try {
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-9999px";
+      container.style.top = "-9999px";
+      container.style.width = `${width}px`;
+      container.style.height = `${height}px`;
+      container.style.background = "#ffffff";
+      container.style.overflow = "hidden";
+      container.style.zIndex = "-9999";
+      document.body.appendChild(container);
 
-    const ChartConfig = CHART_TYPES.find(c => c.key === chartType);
-    const isPie = chartType === "pie";
-    const isHistogram = chartType === "histogram";
+      const ChartConfig = CHART_TYPES.find(c => c.key === chartType);
+      const isPie = chartType === "pie";
+      const isHistogram = chartType === "histogram";
 
-    let chartContent;
-    if (isPie) {
-      chartContent = (
-        <PieChart width={width} height={height}>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={Math.min(width, height) * 0.35}
-            dataKey="value"
-            nameKey="name"
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-            labelLine={false}
-            isAnimationActive={false}
-          >
-            {chartData.map((_, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-          </Pie>
-          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
-        </PieChart>
-      );
-    } else if (isHistogram && ChartConfig) {
-      chartContent = (
-        <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 20, bottom: 20 }}>
-          <CartesianGrid stroke="#e5e7eb" horizontal={false} />
-          <XAxis type="number" tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
-          <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
-          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
-          <Bar dataKey="value" fill="url(#histFill)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
-          <defs>
-            <linearGradient id="histFill" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#6366f1" />
-              <stop offset="100%" stopColor="#a855f7" />
-            </linearGradient>
-          </defs>
-        </BarChart>
-      );
-    } else if (ChartConfig) {
-      const Series = ChartConfig.Series;
-      const keys = chartData.length > 0 ? Object.keys(chartData[0]).filter(k => k !== xCol) : [yCol];
-      chartContent = (
-        <ChartConfig.Chart width={width} height={height} data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
-          <defs>
-            <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#a855f7" stopOpacity={0.8} />
-            </linearGradient>
-            <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#3b82f6" />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="#e5e7eb" horizontal={chartType !== "scatter"} />
-          <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
-          <YAxis tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
-          <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "#f3f4f6" }} />
-          <Legend />
-          {keys.map((key, i) => (
-            <Series
-              key={key}
-              dataKey={key}
-              name={key}
-              stroke={CHART_COLORS[i % CHART_COLORS.length]}
-              fill={chartType === "area" ? "url(#barFill)" : chartType === "bar" ? CHART_COLORS[i % CHART_COLORS.length] : "none"}
-              fillOpacity={chartType === "bar" || chartType === "area" ? 0.85 : 1}
-              dot={chartType === "scatter" || chartType === "line" ? { r: 4, fill: CHART_COLORS[i % CHART_COLORS.length] } : false}
+      let chartContent;
+      if (isPie) {
+        chartContent = (
+          <PieChart width={width} height={height}>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={Math.min(width, height) * 0.35}
+              dataKey="value"
+              nameKey="name"
+              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              labelLine={false}
               isAnimationActive={false}
-            />
-          ))}
-        </ChartConfig.Chart>
-      );
-    } else {
-      chartContent = <div style={{width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666'}}>Chart type not supported</div>;
-    }
-
-    const root = createRoot(container);
-    root.render(chartContent);
-
-    const cleanUp = () => {
-      try {
-        if (document.body.contains(container)) {
-          document.body.removeChild(container);
-        }
-        root.unmount();
-      } catch (e) {
-        // Ignore cleanup errors
+            >
+              {chartData.map((_, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
+          </PieChart>
+        );
+      } else if (isHistogram && ChartConfig) {
+        chartContent = (
+          <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 20, bottom: 20 }}>
+            <CartesianGrid stroke="#e5e7eb" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+            <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} />
+            <Bar dataKey="value" fill="url(#histFill)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
+            <defs>
+              <linearGradient id="histFill" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#a855f7" />
+              </linearGradient>
+            </defs>
+          </BarChart>
+        );
+      } else if (ChartConfig) {
+        const Series = ChartConfig.Series;
+        const keys = chartData.length > 0 ? Object.keys(chartData[0]).filter(k => k !== xCol) : [yCol];
+        chartContent = (
+          <ChartConfig.Chart width={width} height={height} data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+            <defs>
+              <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
+                <stop offset="100%" stopColor="#a855f7" stopOpacity={0.8} />
+              </linearGradient>
+              <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="100%" stopColor="#3b82f6" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="#e5e7eb" horizontal={chartType !== "scatter"} />
+            <XAxis dataKey={xCol} type={chartType === "scatter" ? "number" : "category"} tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+            <YAxis tick={{ fill: "#374151", fontSize: 11 }} axisLine={{ stroke: "#d1d5db" }} tickLine={false} />
+            <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "#f3f4f6" }} />
+            <Legend />
+            {keys.map((key, i) => (
+              <Series
+                key={key}
+                dataKey={key}
+                name={key}
+                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                fill={chartType === "area" ? "url(#barFill)" : chartType === "bar" ? CHART_COLORS[i % CHART_COLORS.length] : "none"}
+                fillOpacity={chartType === "bar" || chartType === "area" ? 0.85 : 1}
+                dot={chartType === "scatter" || chartType === "line" ? { r: 4, fill: CHART_COLORS[i % CHART_COLORS.length] } : false}
+                isAnimationActive={false}
+              />
+            ))}
+          </ChartConfig.Chart>
+        );
+      } else {
+        chartContent = <div style={{width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666'}}>Chart type not supported</div>;
       }
-    };
 
-    const fallbackHtml2Canvas = () => {
-      html2canvas(container, {
-        width,
-        height,
-        backgroundColor: "#ffffff",
-        scale: 2,
-        logging: false,
-        useCORS: true,
-      })
-        .then((canvas) => {
-          const imgData = canvas.toDataURL("image/png").split(",")[1];
-          cleanUp();
-          resolve(imgData);
-        })
-        .catch((err) => {
-          console.error("html2canvas error:", err);
-          cleanUp();
-          resolve(null);
-        });
-    };
+      const root = createRoot(container);
+      root.render(chartContent);
 
-    const attemptCapture = () => {
-      const svg = container.querySelector("svg");
-      if (svg) {
+      const cleanUp = () => {
         try {
+          if (document.body.contains(container)) {
+            document.body.removeChild(container);
+          }
+          root.unmount();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      };
+
+      const attemptCapture = () => {
+        try {
+          const svg = container.querySelector("svg");
+          if (!svg) throw new Error("SVG element not found in rendered output");
+
           const serializer = new XMLSerializer();
           let svgString = serializer.serializeToString(svg);
-          if (!svgString.includes("xmlns=")) {
-            svgString = svgString.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+          if (!svgString.match(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+            svgString = svgString.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
           }
-          const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-          const url = URL.createObjectURL(blob);
+
+          const base64 = btoa(unescape(encodeURIComponent(svgString)));
+          const url = `data:image/svg+xml;base64,${base64}`;
+          
           const img = new Image();
           img.onload = () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = width * 2;
-            canvas.height = height * 2;
-            const ctx = canvas.getContext("2d");
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.scale(2, 2);
-            ctx.drawImage(img, 0, 0, width, height);
-            URL.revokeObjectURL(url);
-            const imgData = canvas.toDataURL("image/png").split(",")[1];
-            cleanUp();
-            resolve(imgData);
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = width * 2;
+              canvas.height = height * 2;
+              const ctx = canvas.getContext("2d");
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(2, 2);
+              ctx.drawImage(img, 0, 0, width, height);
+              const imgData = canvas.toDataURL("image/png").split(",")[1];
+              cleanUp();
+              resolve(imgData);
+            } catch (canvasErr) {
+              cleanUp();
+              reject(new Error("Canvas capture failed: " + canvasErr.message));
+            }
           };
           img.onerror = () => {
-            fallbackHtml2Canvas();
+            cleanUp();
+            reject(new Error("Failed to load SVG into image for canvas generation."));
           };
           img.src = url;
-          return;
         } catch (e) {
-          console.warn("SVG direct conversion failed, falling back to html2canvas", e);
+          cleanUp();
+          reject(e);
         }
-      }
-      fallbackHtml2Canvas();
-    };
+      };
 
-    let attempts = 0;
-    const checkRender = () => {
-      attempts++;
-      const svg = container.querySelector("svg");
-      if (svg && svg.childNodes.length > 0) {
-        attemptCapture();
-      } else if (attempts > 30) {
-        fallbackHtml2Canvas();
-      } else {
-        setTimeout(checkRender, 100);
-      }
-    };
+      let attempts = 0;
+      const checkRender = () => {
+        attempts++;
+        const svg = container.querySelector("svg");
+        if (svg && svg.childNodes.length > 0) {
+          attemptCapture();
+        } else if (attempts > 30) {
+          cleanUp();
+          reject(new Error(`Chart render timeout (SVG not populated after ${attempts} attempts)`));
+        } else {
+          setTimeout(checkRender, 100);
+        }
+      };
 
-    setTimeout(checkRender, 200);
+      setTimeout(checkRender, 200);
+    } catch (globalErr) {
+      reject(globalErr);
+    }
   });
 }
 
@@ -390,11 +380,11 @@ export function ExportStep({ jobId, results, inspection, backendResults, trainCf
           });
           setExportLogs(prev => [...prev, `✓ ${chart.title} added`]);
         } else {
-          setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}`]);
+          setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}: imgData is null`]);
         }
       } catch (e) {
         console.warn(`Failed to generate ${chart.name}:`, e);
-        setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}`]);
+        setExportLogs(prev => [...prev, `⚠ Failed to generate ${chart.title}: ${e.message || "Unknown error"}`]);
       }
       
       setExportProgress(20 + Math.round((i + 1) / chartsToGenerate.length * 70));
